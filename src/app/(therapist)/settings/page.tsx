@@ -25,6 +25,8 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<StyleProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isBackfilling, setIsBackfilling] = useState(false);
+  const [backfillMessage, setBackfillMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const fetchProfile = async () => {
@@ -51,6 +53,27 @@ export default function SettingsPage() {
       setError("Failed to refresh profile");
     } finally {
       setIsRefreshing(false);
+    }
+  };
+
+  const handleBackfill = async () => {
+    setIsBackfilling(true);
+    setBackfillMessage(null);
+    setError(null);
+    try {
+      const response = await fetch("/api/therapist/style/backfill", { method: "POST" });
+      const data = await response.json();
+      if (response.ok) {
+        setBackfillMessage(data.message);
+        // Refresh the profile after backfill
+        await fetchProfile();
+      } else {
+        setError(data.error || "Failed to analyze sessions");
+      }
+    } catch {
+      setError("Failed to analyze sessions");
+    } finally {
+      setIsBackfilling(false);
     }
   };
 
@@ -121,6 +144,12 @@ export default function SettingsPage() {
           </Button>
         </CardHeader>
         <CardContent>
+          {backfillMessage && (
+            <div className="mb-4 p-3 bg-primary-50 border border-primary-200 rounded-lg text-primary-700 text-sm">
+              {backfillMessage}
+            </div>
+          )}
+
           {!profile ? (
             <div className="text-center py-8">
               <div className="text-sage-400 mb-3">
@@ -129,10 +158,20 @@ export default function SettingsPage() {
                 </svg>
               </div>
               <p className="text-sage-600 font-medium mb-2">No style profile yet</p>
-              <p className="text-sage-500 text-sm">
-                Upload session transcripts to automatically build your clinical style profile.
+              <p className="text-sage-500 text-sm mb-4">
+                Click below to analyze your existing session transcripts and build your clinical style profile.
                 The AI will learn your therapeutic approach and personalize generated plans.
               </p>
+              <Button
+                onClick={handleBackfill}
+                isLoading={isBackfilling}
+                disabled={isBackfilling}
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                Analyze My Sessions
+              </Button>
             </div>
           ) : (
             <div className="space-y-6">
