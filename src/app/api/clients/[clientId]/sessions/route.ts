@@ -123,7 +123,7 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { session_date, transcript_text } = body;
+    const { session_date, transcript_text, media_storage_path } = body;
 
     if (!session_date || !transcript_text) {
       return NextResponse.json(
@@ -147,6 +147,7 @@ export async function POST(
         client_id: clientId,
         session_date,
         transcript_text,
+        ...(media_storage_path && { media_storage_path }),
       })
       .select()
       .single();

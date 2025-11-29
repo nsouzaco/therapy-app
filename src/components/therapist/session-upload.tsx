@@ -4,6 +4,11 @@ import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
+import {
+  extractAudioFromVideo,
+  isVideoFile,
+  type ExtractAudioProgress,
+} from "@/lib/utils/extract-audio";
 
 interface SessionUploadProps {
   clientId: string;
@@ -11,8 +16,15 @@ interface SessionUploadProps {
 }
 
 const MAX_CHARS = 50000;
-const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB (OpenAI Whisper limit)
-const DIRECT_UPLOAD_LIMIT = 4 * 1024 * 1024; // 4MB - files larger than this go through storage
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB for video files (we extract audio)
+const MAX_AUDIO_SIZE = 25 * 1024 * 1024; // 25MB for audio-only files
+
+type ProcessingPhase =
+  | "idle"
+  | "loading-ffmpeg"
+  | "extracting-audio"
+  | "uploading-video"
+  | "transcribing";
 
 export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
   const [sessionDate, setSessionDate] = useState(
@@ -21,23 +33,28 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
   const [transcript, setTranscript] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [processingPhase, setProcessingPhase] = useState<ProcessingPhase>("idle");
+  const [processingProgress, setProcessingProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [mediaStoragePath, setMediaStoragePath] = useState<string | null>(null);
   const [transcriptionInfo, setTranscriptionInfo] = useState<{
     duration?: number;
     language?: string;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isAudioOrVideo = (file: File) => {
-    const audioVideoTypes = [
+  const isAudioFile = (file: File) => {
+    const audioTypes = [
       "audio/mpeg", "audio/mp3", "audio/mp4", "audio/m4a",
       "audio/wav", "audio/webm", "audio/ogg", "audio/x-m4a",
-      "video/mp4", "video/webm", "video/quicktime",
     ];
-    return audioVideoTypes.some(t => file.type.includes(t.split("/")[1])) ||
-      file.name.match(/\.(mp3|m4a|wav|webm|ogg|mp4|mov)$/i);
+    return audioTypes.some(t => file.type.includes(t.split("/")[1])) ||
+      file.name.match(/\.(mp3|m4a|wav|webm|ogg)$/i);
+  };
+
+  const isAudioOrVideo = (file: File) => {
+    return isAudioFile(file) || isVideoFile(file);
   };
 
   const isTextFile = (file: File) => {
@@ -46,6 +63,7 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
 
   const handleFile = useCallback(async (file: File) => {
     setError(null);
+    setMediaStoragePath(null);
 
     // Handle text files
     if (isTextFile(file)) {
@@ -67,29 +85,51 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
 
     // Handle audio/video files
     if (isAudioOrVideo(file)) {
-      if (file.size > MAX_FILE_SIZE) {
+      const isVideo = isVideoFile(file);
+      
+      // Check file size limits
+      if (isVideo && file.size > MAX_FILE_SIZE) {
         const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-        setError(`File too large (${sizeMB}MB). Maximum size is 25MB due to OpenAI API limits.`);
+        setError(`Video file too large (${sizeMB}MB). Maximum size is 100MB.`);
+        return;
+      }
+      if (!isVideo && file.size > MAX_AUDIO_SIZE) {
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+        setError(`Audio file too large (${sizeMB}MB). Maximum size is 25MB.`);
         return;
       }
 
       setUploadedFile(file);
       setTranscript("");
       setTranscriptionInfo(null);
-      setIsTranscribing(true);
 
       try {
-        let response: Response;
+        let audioFile: File = file;
+        let storagePath: string | null = null;
+        const supabase = createClient();
 
-        // For larger files, upload to Supabase Storage first to bypass Vercel limits
-        if (file.size > DIRECT_UPLOAD_LIMIT) {
-          const supabase = createClient();
-          
-          // Generate unique file path
+        // For video files: extract audio and upload video for playback
+        if (isVideo) {
+          // Step 1: Extract audio from video
+          setProcessingPhase("loading-ffmpeg");
+          setProcessingProgress(null);
+
+          audioFile = await extractAudioFromVideo(file, (progress: ExtractAudioProgress) => {
+            if (progress.phase === "loading") {
+              setProcessingPhase("loading-ffmpeg");
+            } else if (progress.phase === "extracting") {
+              setProcessingPhase("extracting-audio");
+              setProcessingProgress(progress.progress ?? null);
+            }
+          });
+
+          // Step 2: Upload video to storage for playback
+          setProcessingPhase("uploading-video");
+          setProcessingProgress(null);
+
           const fileExt = file.name.split(".").pop() || "mp4";
-          const storagePath = `${clientId}/${Date.now()}.${fileExt}`;
+          storagePath = `${clientId}/${Date.now()}.${fileExt}`;
 
-          // Upload to Supabase Storage
           const { error: uploadError } = await supabase.storage
             .from("session-media")
             .upload(storagePath, file, {
@@ -98,25 +138,25 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
             });
 
           if (uploadError) {
-            throw new Error(`Upload failed: ${uploadError.message}`);
+            console.error("Video upload error:", uploadError);
+            // Non-fatal: continue with transcription even if video upload fails
+            storagePath = null;
+          } else {
+            setMediaStoragePath(storagePath);
           }
-
-          // Call transcribe API with storage path
-          response = await fetch("/api/transcribe", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ storagePath }),
-          });
-        } else {
-          // For smaller files, direct upload
-          const formData = new FormData();
-          formData.append("audio", file);
-
-          response = await fetch("/api/transcribe", {
-            method: "POST",
-            body: formData,
-          });
         }
+
+        // Step 3: Transcribe the audio
+        setProcessingPhase("transcribing");
+        setProcessingProgress(null);
+
+        const formData = new FormData();
+        formData.append("audio", audioFile);
+
+        const response = await fetch("/api/transcribe", {
+          method: "POST",
+          body: formData,
+        });
 
         const contentType = response.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
@@ -136,24 +176,20 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
           language: data.language,
         });
       } catch (err) {
-        console.error("Transcription error:", err);
-        const message = err instanceof Error ? err.message : "Failed to transcribe";
-        if (message.includes("Entity Too Large") || message.includes("too large")) {
-          setError("File too large. Please use a file under 25MB.");
-        } else if (message.includes("timeout") || message.includes("Timeout")) {
-          setError("Transcription timed out. Try a shorter recording.");
-        } else {
-          setError(message);
-        }
+        console.error("Processing error:", err);
+        const message = err instanceof Error ? err.message : "Failed to process file";
+        setError(message);
         setUploadedFile(null);
+        setMediaStoragePath(null);
       } finally {
-        setIsTranscribing(false);
+        setProcessingPhase("idle");
+        setProcessingProgress(null);
       }
       return;
     }
 
     setError("Unsupported file type. Please upload audio, video, or text files.");
-  }, []);
+  }, [clientId]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -203,6 +239,7 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
         body: JSON.stringify({
           session_date: sessionDate,
           transcript_text: transcript,
+          media_storage_path: mediaStoragePath,
         }),
       });
 
@@ -230,15 +267,34 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
     setTranscript("");
     setUploadedFile(null);
     setTranscriptionInfo(null);
+    setMediaStoragePath(null);
     setError(null);
   };
 
   const charCount = transcript.length;
   const charPercentage = (charCount / MAX_CHARS) * 100;
+  const isProcessing = processingPhase !== "idle";
+
+  const getProcessingMessage = () => {
+    switch (processingPhase) {
+      case "loading-ffmpeg":
+        return "Loading audio processor...";
+      case "extracting-audio":
+        return processingProgress !== null
+          ? `Extracting audio... ${processingProgress}%`
+          : "Extracting audio...";
+      case "uploading-video":
+        return "Uploading video for playback...";
+      case "transcribing":
+        return "Transcribing audio...";
+      default:
+        return "Processing...";
+    }
+  };
 
   const getFileIcon = () => {
     if (!uploadedFile) return null;
-    if (uploadedFile.type.startsWith("video/")) {
+    if (uploadedFile.type.startsWith("video/") || isVideoFile(uploadedFile)) {
       return (
         <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -304,12 +360,12 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
               className="hidden"
             />
 
-            {isTranscribing ? (
+            {isProcessing ? (
               <div className="flex flex-col items-center">
                 <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600 mb-4" />
-                <p className="text-sage-600 font-medium">Transcribing...</p>
+                <p className="text-sage-600 font-medium">{getProcessingMessage()}</p>
                 <p className="text-sm text-sage-500 mt-1">
-                  This may take a minute for longer recordings
+                  This may take a moment for longer recordings
                 </p>
               </div>
             ) : uploadedFile && transcript ? (
@@ -327,6 +383,11 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
                       <span>Language: {transcriptionInfo.language.toUpperCase()}</span>
                     )}
                   </div>
+                )}
+                {mediaStoragePath && (
+                  <p className="text-xs text-green-600 mt-2">
+                    ✓ Video saved for playback
+                  </p>
                 )}
                 <button
                   type="button"
@@ -354,10 +415,10 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
                   </button>
                 </p>
                 <p className="text-xs text-sage-400">
-                  Audio/Video (MP3, MP4, M4A, WAV, WebM) or Text (.txt)
+                  Audio (MP3, M4A, WAV) or Video (MP4, WebM) or Text (.txt)
                 </p>
                 <p className="text-xs text-sage-400 mt-1">
-                  Audio/video files are automatically transcribed • Max 25MB
+                  Video files will be saved for playback • Audio is transcribed automatically
                 </p>
               </>
             )}
@@ -374,7 +435,7 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
             onChange={handleTranscriptChange}
             placeholder="Upload a file above or paste/type the transcript here..."
             className="input min-h-[300px] font-mono text-sm resize-y"
-            disabled={isTranscribing}
+            disabled={isProcessing}
           />
 
           {/* Character count */}
@@ -411,7 +472,7 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
         <Button
           type="submit"
           isLoading={isLoading}
-          disabled={!transcript.trim() || isTranscribing}
+          disabled={!transcript.trim() || isProcessing}
         >
           Save Session
         </Button>

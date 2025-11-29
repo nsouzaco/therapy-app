@@ -61,9 +61,7 @@ export async function GET(
         summary_client,
         key_themes,
         progress_notes,
-        video_url,
-        video_filename,
-        video_duration_seconds,
+        media_storage_path,
         client_profiles!sessions_client_id_fkey (
           id,
           therapist_id,
@@ -102,6 +100,16 @@ export async function GET(
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
+    // Generate signed URL for video playback if media exists
+    let videoUrl: string | null = null;
+    const mediaPath = session.media_storage_path as string | null;
+    if (mediaPath) {
+      const { data: signedUrlData } = await supabase.storage
+        .from("session-media")
+        .createSignedUrl(mediaPath, 3600); // 1 hour expiry
+      videoUrl = signedUrlData?.signedUrl || null;
+    }
+
     return NextResponse.json({
       session: {
         id: session.id,
@@ -113,9 +121,8 @@ export async function GET(
         summary_client: session.summary_client,
         key_themes: session.key_themes,
         progress_notes: session.progress_notes,
-        video_url: session.video_url,
-        video_filename: session.video_filename,
-        video_duration_seconds: session.video_duration_seconds,
+        video_url: videoUrl,
+        video_filename: mediaPath ? mediaPath.split("/").pop() : null,
         client: {
           id: clientProfile?.id,
           name: clientProfile?.users?.name || "Unknown",
