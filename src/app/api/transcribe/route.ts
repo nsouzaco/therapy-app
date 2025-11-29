@@ -5,22 +5,10 @@ import { getOpenAIClient } from "@/lib/ai/openai-client";
 // Increase timeout for transcription (Vercel serverless functions)
 export const maxDuration = 60;
 
-// Supported audio/video formats
-const SUPPORTED_FORMATS = [
-  "audio/mpeg",
-  "audio/mp3",
-  "audio/mp4",
-  "audio/m4a",
-  "audio/wav",
-  "audio/webm",
-  "audio/ogg",
-  "video/mp4",
-  "video/webm",
-];
-
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB (OpenAI Whisper API limit)
 
 // POST /api/transcribe - Transcribe audio file using OpenAI Whisper
+// Accepts either a storage path (for large files) or direct file upload (for small files)
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -34,34 +22,68 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get form data with audio file
-    const formData = await request.formData();
-    const audioFile = formData.get("audio") as File | null;
+    const contentType = request.headers.get("content-type") || "";
+    let audioFile: File;
 
-    if (!audioFile) {
-      return NextResponse.json(
-        { error: "No audio file provided" },
-        { status: 400 }
-      );
-    }
+    // Check if this is a storage path request (JSON) or direct upload (FormData)
+    if (contentType.includes("application/json")) {
+      // Storage path mode - fetch file from Supabase Storage
+      const body = await request.json();
+      const { storagePath } = body;
 
-    // Validate file type
-    if (!SUPPORTED_FORMATS.includes(audioFile.type)) {
-      return NextResponse.json(
-        {
-          error: `Unsupported format. Supported: MP3, MP4, M4A, WAV, WebM, OGG`,
-        },
-        { status: 400 }
-      );
-    }
+      if (!storagePath) {
+        return NextResponse.json(
+          { error: "No storage path provided" },
+          { status: 400 }
+        );
+      }
 
-    // Validate file size (OpenAI Whisper limit is 25MB)
-    if (audioFile.size > MAX_FILE_SIZE) {
-      const sizeMB = (audioFile.size / (1024 * 1024)).toFixed(1);
-      return NextResponse.json(
-        { error: `File too large (${sizeMB}MB). Maximum size is 25MB due to OpenAI API limits.` },
-        { status: 400 }
-      );
+      // Download file from Supabase Storage
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from("session-media")
+        .download(storagePath);
+
+      if (downloadError || !fileData) {
+        console.error("Storage download error:", downloadError);
+        return NextResponse.json(
+          { error: "Failed to download file from storage" },
+          { status: 400 }
+        );
+      }
+
+      // Check file size
+      if (fileData.size > MAX_FILE_SIZE) {
+        const sizeMB = (fileData.size / (1024 * 1024)).toFixed(1);
+        return NextResponse.json(
+          { error: `File too large (${sizeMB}MB). Maximum size is 25MB for transcription.` },
+          { status: 400 }
+        );
+      }
+
+      // Convert Blob to File for OpenAI API
+      const fileName = storagePath.split("/").pop() || "audio.mp4";
+      audioFile = new File([fileData], fileName, { type: fileData.type });
+    } else {
+      // Direct upload mode (for smaller files that fit within Vercel limits)
+      const formData = await request.formData();
+      const uploadedFile = formData.get("audio") as File | null;
+
+      if (!uploadedFile) {
+        return NextResponse.json(
+          { error: "No audio file provided" },
+          { status: 400 }
+        );
+      }
+
+      if (uploadedFile.size > MAX_FILE_SIZE) {
+        const sizeMB = (uploadedFile.size / (1024 * 1024)).toFixed(1);
+        return NextResponse.json(
+          { error: `File too large (${sizeMB}MB). Maximum size is 25MB.` },
+          { status: 400 }
+        );
+      }
+
+      audioFile = uploadedFile;
     }
 
     // Call OpenAI Whisper API
@@ -70,7 +92,7 @@ export async function POST(request: NextRequest) {
     const transcription = await openai.audio.transcriptions.create({
       file: audioFile,
       model: "whisper-1",
-      language: "en", // Can be made dynamic for multi-language support
+      language: "en",
       response_format: "verbose_json",
       timestamp_granularities: ["segment"],
     });

@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { createClient } from "@/lib/supabase/client";
 
 interface SessionUploadProps {
   clientId: string;
@@ -11,6 +12,7 @@ interface SessionUploadProps {
 
 const MAX_CHARS = 50000;
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB (OpenAI Whisper limit)
+const DIRECT_UPLOAD_LIMIT = 4 * 1024 * 1024; // 4MB - files larger than this go through storage
 
 export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
   const [sessionDate, setSessionDate] = useState(
@@ -77,13 +79,44 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
       setIsTranscribing(true);
 
       try {
-        const formData = new FormData();
-        formData.append("audio", file);
+        let response: Response;
 
-        const response = await fetch("/api/transcribe", {
-          method: "POST",
-          body: formData,
-        });
+        // For larger files, upload to Supabase Storage first to bypass Vercel limits
+        if (file.size > DIRECT_UPLOAD_LIMIT) {
+          const supabase = createClient();
+          
+          // Generate unique file path
+          const fileExt = file.name.split(".").pop() || "mp4";
+          const storagePath = `${clientId}/${Date.now()}.${fileExt}`;
+
+          // Upload to Supabase Storage
+          const { error: uploadError } = await supabase.storage
+            .from("session-media")
+            .upload(storagePath, file, {
+              cacheControl: "3600",
+              upsert: false,
+            });
+
+          if (uploadError) {
+            throw new Error(`Upload failed: ${uploadError.message}`);
+          }
+
+          // Call transcribe API with storage path
+          response = await fetch("/api/transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ storagePath }),
+          });
+        } else {
+          // For smaller files, direct upload
+          const formData = new FormData();
+          formData.append("audio", file);
+
+          response = await fetch("/api/transcribe", {
+            method: "POST",
+            body: formData,
+          });
+        }
 
         const contentType = response.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
