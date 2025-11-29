@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useState, useCallback } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GenerateButton } from "@/components/plan/generate-button";
 
 interface Session {
   id: string;
@@ -35,29 +36,30 @@ interface Client {
 
 export default function ClientDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const clientId = params.id as string;
   const [client, setClient] = useState<Client | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchClient = async () => {
-      try {
-        const response = await fetch(`/api/therapist/clients/${clientId}`);
-        if (!response.ok) {
-          throw new Error("Failed to fetch client");
-        }
-        const data = await response.json();
-        setClient(data.client);
-      } catch {
-        setError("Failed to load client details");
-      } finally {
-        setIsLoading(false);
+  const fetchClient = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/therapist/clients/${clientId}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch client");
       }
-    };
-
-    fetchClient();
+      const data = await response.json();
+      setClient(data.client);
+    } catch {
+      setError("Failed to load client details");
+    } finally {
+      setIsLoading(false);
+    }
   }, [clientId]);
+
+  useEffect(() => {
+    fetchClient();
+  }, [fetchClient]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -159,12 +161,24 @@ export default function ClientDetailPage() {
             ) : (
               <div className="text-center py-4">
                 <p className="text-sage-500 text-sm mb-3">No treatment plan yet</p>
-                <p className="text-sage-400 text-xs mb-4">
-                  Upload a session transcript to generate a plan
-                </p>
-                <Button variant="outline" size="sm" disabled>
-                  Generate Plan
-                </Button>
+                {client.session_count > 0 ? (
+                  <GenerateButton
+                    clientId={clientId}
+                    onSuccess={() => router.push(`/clients/${clientId}/plan`)}
+                    size="sm"
+                  />
+                ) : (
+                  <>
+                    <p className="text-sage-400 text-xs mb-4">
+                      Upload a session transcript to generate a plan
+                    </p>
+                    <Link href={`/clients/${clientId}/sessions/new`}>
+                      <Button variant="outline" size="sm">
+                        Upload Session
+                      </Button>
+                    </Link>
+                  </>
+                )}
               </div>
             )}
           </CardContent>

@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GenerateButton } from "@/components/plan/generate-button";
 
 interface Session {
   id: string;
@@ -21,6 +22,7 @@ interface Session {
 
 export default function SessionDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const sessionId = params.id as string;
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -94,13 +96,11 @@ export default function SessionDetailPage() {
             <p className="text-sage-600">{session.client.name}</p>
           </div>
           <div className="flex gap-3">
-            {/* Generate Plan button - disabled placeholder for Phase 3 */}
-            <Button disabled title="Coming in Phase 3">
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Generate Plan
-            </Button>
+            <GenerateButton
+              clientId={session.client.id}
+              sessionId={sessionId}
+              onSuccess={() => router.push(`/clients/${session.client.id}/plan`)}
+            />
           </div>
         </div>
       </div>

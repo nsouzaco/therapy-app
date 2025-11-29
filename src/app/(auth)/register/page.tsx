@@ -29,7 +29,6 @@ export default function RegisterPage() {
       const supabase = createClient();
 
       // If registering as client, verify therapist exists
-      let therapistId: string | null = null;
       if (role === "client") {
         const { data: therapistData, error: therapistError } = await supabase
           .from("users")
@@ -42,17 +41,6 @@ export default function RegisterPage() {
           setError("No therapist found with that email address.");
           setIsLoading(false);
           return;
-        }
-
-        // Get therapist profile ID
-        const { data: profileData } = await supabase
-          .from("therapist_profiles")
-          .select("id")
-          .eq("user_id", therapistData.id)
-          .single();
-
-        if (profileData) {
-          therapistId = profileData.id;
         }
       }
 
@@ -79,51 +67,9 @@ export default function RegisterPage() {
         return;
       }
 
-      // Ensure user record exists in public.users table
-      // (backup in case the database trigger doesn't run)
-      const { error: userInsertError } = await supabase
-        .from("users")
-        .upsert({
-          id: authData.user.id,
-          email: email,
-          name: name,
-          role: role,
-        }, { onConflict: "id" });
-
-      if (userInsertError) {
-        console.error("Error ensuring user record:", userInsertError);
-      }
-
-      // If therapist, ensure therapist profile exists
-      if (role === "therapist") {
-        const { error: therapistProfileError } = await supabase
-          .from("therapist_profiles")
-          .upsert({
-            user_id: authData.user.id,
-          }, { onConflict: "user_id" });
-
-        if (therapistProfileError) {
-          console.error("Error creating therapist profile:", therapistProfileError);
-        }
-      }
-
-      // If client, create client profile linked to therapist
-      if (role === "client" && therapistId) {
-        const { error: profileError } = await supabase
-          .from("client_profiles")
-          .upsert({
-            user_id: authData.user.id,
-            therapist_id: therapistId,
-          }, { onConflict: "user_id" });
-
-        if (profileError) {
-          console.error("Error creating client profile:", profileError);
-        }
-      } else if (role === "client" && !therapistId) {
-        console.error("Client registration failed: therapist profile ID not found");
-        setError("Unable to link to therapist. Please contact support.");
-        return;
-      }
+      // Note: User records are created by database trigger (handle_new_user)
+      // Client profiles are created on first login via /api/auth/complete-registration
+      // This handles the email confirmation flow correctly
 
       // Redirect based on role
       if (role === "therapist") {
