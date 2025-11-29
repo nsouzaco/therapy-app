@@ -18,7 +18,7 @@ const SUPPORTED_FORMATS = [
   "video/webm",
 ];
 
-const MAX_FILE_SIZE = 32 * 1024 * 1024; // 32MB
+const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB (OpenAI Whisper API limit)
 
 // POST /api/transcribe - Transcribe audio file using OpenAI Whisper
 export async function POST(request: NextRequest) {
@@ -55,10 +55,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file size
+    // Validate file size (OpenAI Whisper limit is 25MB)
     if (audioFile.size > MAX_FILE_SIZE) {
+      const sizeMB = (audioFile.size / (1024 * 1024)).toFixed(1);
       return NextResponse.json(
-        { error: "File too large. Maximum size is 32MB." },
+        { error: `File too large (${sizeMB}MB). Maximum size is 25MB due to OpenAI API limits.` },
         { status: 400 }
       );
     }

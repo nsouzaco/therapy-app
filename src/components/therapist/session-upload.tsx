@@ -10,7 +10,7 @@ interface SessionUploadProps {
 }
 
 const MAX_CHARS = 50000;
-const MAX_AUDIO_SIZE = 32 * 1024 * 1024; // 32MB
+const MAX_AUDIO_SIZE = 25 * 1024 * 1024; // 25MB (OpenAI Whisper limit)
 
 type UploadMode = "text" | "audio";
 
@@ -82,7 +82,8 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
     }
 
     if (file.size > MAX_AUDIO_SIZE) {
-      setError("File too large. Maximum size is 32MB.");
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      setError(`File too large (${sizeMB}MB). Maximum size is 25MB due to OpenAI API limits.`);
       return;
     }
 
@@ -423,7 +424,7 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
                     </button>
                   </p>
                   <p className="text-xs text-sage-400">
-                    Supports MP3, MP4, M4A, WAV, WebM, OGG (max 32MB)
+                    Supports MP3, MP4, M4A, WAV, WebM, OGG (max 25MB)
                   </p>
                   <p className="text-xs text-sage-400 mt-1">
                     Audio will be automatically transcribed using AI

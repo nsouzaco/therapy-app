@@ -51,17 +51,6 @@ export async function GET(
           session_date,
           transcript_text,
           created_at
-        ),
-        treatment_plans (
-          id,
-          created_at,
-          updated_at,
-          plan_versions (
-            id,
-            version_number,
-            status,
-            created_at
-          )
         )
       `)
       .eq("id", id)
@@ -71,6 +60,24 @@ export async function GET(
     if (clientError || !client) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
+
+    // Fetch treatment plan separately (more reliable than nested query)
+    const { data: treatmentPlan, error: planError } = await supabase
+      .from("treatment_plans")
+      .select(`
+        id,
+        created_at,
+        updated_at,
+        plan_versions (
+          id,
+          version_number,
+          status,
+          created_at
+        )
+      `)
+      .eq("client_id", id)
+      .single();
+
 
     // Transform sessions - sort by date, truncate transcript for preview
     const sessions = (client.sessions || [])
@@ -88,11 +95,12 @@ export async function GET(
       }));
 
     // Get plan info
-    const plan = client.treatment_plans?.[0];
+    const plan = treatmentPlan;
     const latestVersion = plan?.plan_versions?.sort(
       (a: { version_number: number }, b: { version_number: number }) => 
         b.version_number - a.version_number
     )[0];
+
 
     // Cast users to single object (it's a one-to-one relation)
     const userInfo = client.users as unknown as { id: string; name: string; email: string } | null;
