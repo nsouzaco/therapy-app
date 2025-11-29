@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOpenAIClient } from "@/lib/ai/openai-client";
 
+// Increase timeout for transcription (Vercel serverless functions)
+export const maxDuration = 60;
+
 // Supported audio/video formats
 const SUPPORTED_FORMATS = [
   "audio/mpeg",

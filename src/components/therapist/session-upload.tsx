@@ -103,6 +103,13 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
         body: formData,
       });
 
+      // Handle non-JSON responses (like "Request Entity Too Large")
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        throw new Error(text || `Server error: ${response.status}`);
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
@@ -116,9 +123,16 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
       });
       setError(null);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to transcribe audio"
-      );
+      console.error("Transcription error:", err);
+      const message = err instanceof Error ? err.message : "Failed to transcribe audio";
+      // Provide user-friendly error messages
+      if (message.includes("Entity Too Large") || message.includes("too large")) {
+        setError("File too large. Please use a file under 32MB.");
+      } else if (message.includes("timeout") || message.includes("Timeout")) {
+        setError("Transcription timed out. Try a shorter recording.");
+      } else {
+        setError(message);
+      }
       setAudioFile(null);
     } finally {
       setIsTranscribing(false);
@@ -422,54 +436,54 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
 
         {/* Text Upload Zone */}
         {uploadMode === "text" && (
-          <Card
-            className={`mb-3 border-2 border-dashed transition-colors ${
-              isDragging
-                ? "border-primary-500 bg-primary-50"
-                : "border-sage-300 hover:border-sage-400"
-            }`}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-          >
-            <CardContent className="py-6 text-center">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".txt"
-                onChange={handleFileInput}
-                className="hidden"
-              />
-              <div className="text-sage-400 mb-2">
-                <svg
-                  className="w-10 h-10 mx-auto"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                  />
-                </svg>
-              </div>
-              <p className="text-sage-600 mb-1">
-                Drag and drop a .txt file here, or{" "}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="text-primary-600 hover:text-primary-700 font-medium"
-                >
-                  browse
-                </button>
-              </p>
-              <p className="text-xs text-sage-400">
-                Maximum {MAX_CHARS.toLocaleString()} characters
-              </p>
-            </CardContent>
-          </Card>
+        <Card
+          className={`mb-3 border-2 border-dashed transition-colors ${
+            isDragging
+              ? "border-primary-500 bg-primary-50"
+              : "border-sage-300 hover:border-sage-400"
+          }`}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+        >
+          <CardContent className="py-6 text-center">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".txt"
+              onChange={handleFileInput}
+              className="hidden"
+            />
+            <div className="text-sage-400 mb-2">
+              <svg
+                className="w-10 h-10 mx-auto"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                />
+              </svg>
+            </div>
+            <p className="text-sage-600 mb-1">
+              Drag and drop a .txt file here, or{" "}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="text-primary-600 hover:text-primary-700 font-medium"
+              >
+                browse
+              </button>
+            </p>
+            <p className="text-xs text-sage-400">
+              Maximum {MAX_CHARS.toLocaleString()} characters
+            </p>
+          </CardContent>
+        </Card>
         )}
 
         {/* Transcript Preview/Edit */}
@@ -500,8 +514,8 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
                     charPercentage > 90
                       ? "bg-red-500"
                       : charPercentage > 70
-                        ? "bg-amber-500"
-                        : "bg-primary-500"
+                      ? "bg-amber-500"
+                      : "bg-primary-500"
                   }`}
                   style={{ width: `${Math.min(charPercentage, 100)}%` }}
                 />
