@@ -1,6 +1,34 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+// Helper to verify therapist access
+async function verifyTherapistAccess(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  sessionId: string
+) {
+  const { data: therapistProfile } = await supabase
+    .from("therapist_profiles")
+    .select("id")
+    .eq("user_id", userId)
+    .single();
+
+  if (!therapistProfile) return false;
+
+  const { data: session } = await supabase
+    .from("sessions")
+    .select(`
+      client_profiles!sessions_client_id_fkey (
+        therapist_id
+      )
+    `)
+    .eq("id", sessionId)
+    .single();
+
+  const clientProfile = session?.client_profiles as unknown as { therapist_id: string } | null;
+  return clientProfile?.therapist_id === therapistProfile.id;
+}
+
 // GET /api/sessions/[id] - Get single session detail
 export async function GET(
   request: Request,
@@ -91,6 +119,65 @@ export async function GET(
     });
   } catch (error) {
     console.error("Error in GET /api/sessions/[id]:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/sessions/[id] - Delete a session
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const supabase = await createClient();
+
+    // Get current user
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Verify therapist has access to this session
+    const hasAccess = await verifyTherapistAccess(supabase, user.id, id);
+    if (!hasAccess) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
+
+    // Get the session to return client_id for redirect
+    const { data: session } = await supabase
+      .from("sessions")
+      .select("client_id")
+      .eq("id", id)
+      .single();
+
+    // Delete the session (plan_versions will have source_session_id set to NULL due to ON DELETE SET NULL)
+    const { error: deleteError } = await supabase
+      .from("sessions")
+      .delete()
+      .eq("id", id);
+
+    if (deleteError) {
+      console.error("Error deleting session:", deleteError);
+      return NextResponse.json(
+        { error: "Failed to delete session" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      client_id: session?.client_id,
+    });
+  } catch (error) {
+    console.error("Error in DELETE /api/sessions/[id]:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

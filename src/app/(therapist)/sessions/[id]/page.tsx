@@ -32,6 +32,29 @@ export default function SessionDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"summary" | "transcript">("summary");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/sessions/${sessionId}`, {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        const data = await response.json();
+        router.push(`/clients/${data.client_id}`);
+      } else {
+        const data = await response.json();
+        setError(data.error || "Failed to delete session");
+      }
+    } catch {
+      setError("Failed to delete session");
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -112,9 +135,49 @@ export default function SessionDetailPage() {
               sessionId={sessionId}
               onSuccess={() => router.push(`/clients/${session.client.id}/plan`)}
             />
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Delete
+            </Button>
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold text-sage-900 mb-2">
+              Delete Session?
+            </h3>
+            <p className="text-sage-600 mb-6">
+              This will permanently delete this session and its transcript. This action cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleDelete}
+                isLoading={isDeleting}
+              >
+                Delete Session
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Session Info */}
       <div className="grid gap-6 lg:grid-cols-4 mb-6">
