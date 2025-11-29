@@ -12,6 +12,7 @@ import { InterventionsSection } from "@/components/plan/interventions-section";
 import { HomeworkSection } from "@/components/plan/homework-section";
 import { StrengthsSection } from "@/components/plan/strengths-section";
 import { GenerateButton } from "@/components/plan/generate-button";
+import { VersionHistory } from "@/components/plan/version-history";
 import type { PlanContent, PlanVersion, Goal, Intervention, Homework, Strength } from "@/lib/types/plan";
 
 interface ClientInfo {
@@ -39,6 +40,7 @@ export default function PlanPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
 
   const fetchPlan = useCallback(async () => {
     try {
@@ -216,15 +218,28 @@ export default function PlanPage() {
               <span className="text-sm text-sage-500">Saving...</span>
             )}
             {plan?.current_version && (
-              <span
-                className={`text-xs font-medium px-2 py-1 rounded ${
-                  plan.current_version.status === "approved"
-                    ? "bg-primary-100 text-primary-700"
-                    : "bg-amber-100 text-amber-700"
-                }`}
-              >
-                {plan.current_version.status === "approved" ? "Approved" : "Draft"}
-              </span>
+              <>
+                <span
+                  className={`text-xs font-medium px-2 py-1 rounded ${
+                    plan.current_version.status === "approved"
+                      ? "bg-primary-100 text-primary-700"
+                      : "bg-amber-100 text-amber-700"
+                  }`}
+                >
+                  {plan.current_version.status === "approved" ? "Approved" : "Draft"}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowVersionHistory(true)}
+                  className="text-sage-600"
+                >
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  History
+                </Button>
+              </>
             )}
             {plan?.current_version?.status === "draft" && (
               <Button
@@ -400,9 +415,25 @@ export default function PlanPage() {
             <div className="text-sm text-sage-500 text-center pt-4 border-t border-sage-200">
               Version {plan.current_version.version_number} • Generated{" "}
               {new Date(plan.current_version.created_at).toLocaleDateString()}
+              {" • "}
+              <button 
+                onClick={() => setShowVersionHistory(true)}
+                className="text-primary-600 hover:text-primary-700 underline"
+              >
+                View history
+              </button>
             </div>
           )}
         </div>
+      )}
+
+      {/* Version History Modal */}
+      {showVersionHistory && plan && (
+        <VersionHistory
+          planId={plan.id}
+          currentVersionId={plan.current_version?.id || ""}
+          onClose={() => setShowVersionHistory(false)}
+        />
       )}
     </div>
   );

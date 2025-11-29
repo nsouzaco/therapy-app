@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GenerateButton } from "@/components/plan/generate-button";
+import { VideoPlayer } from "@/components/ui/video-player";
 
 interface Session {
   id: string;
@@ -17,6 +18,9 @@ interface Session {
   summary_client?: string;
   key_themes?: string[];
   progress_notes?: string;
+  video_url?: string;
+  video_filename?: string;
+  video_duration_seconds?: number;
   client: {
     id: string;
     name: string;
@@ -228,6 +232,36 @@ export default function SessionDetailPage() {
             ))}
           </div>
         </div>
+      )}
+
+      {/* Video Recording */}
+      {session.video_url && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              Session Recording
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <VideoPlayer 
+              src={session.video_url} 
+              className="w-full aspect-video max-h-[500px]"
+            />
+            {session.video_filename && (
+              <p className="text-sm text-sage-500 mt-2">
+                {session.video_filename}
+                {session.video_duration_seconds && (
+                  <span className="ml-2">
+                    • {Math.floor(session.video_duration_seconds / 60)}:{(session.video_duration_seconds % 60).toString().padStart(2, '0')}
+                  </span>
+                )}
+              </p>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* Tabs */}

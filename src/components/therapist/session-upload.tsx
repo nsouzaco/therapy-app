@@ -10,153 +10,124 @@ interface SessionUploadProps {
 }
 
 const MAX_CHARS = 50000;
-const MAX_AUDIO_SIZE = 25 * 1024 * 1024; // 25MB (OpenAI Whisper limit)
-
-type UploadMode = "text" | "audio";
+const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB (OpenAI Whisper limit)
 
 export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
   const [sessionDate, setSessionDate] = useState(
     new Date().toISOString().split("T")[0]
   );
   const [transcript, setTranscript] = useState("");
-  const [uploadMode, setUploadMode] = useState<UploadMode>("text");
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [transcriptionInfo, setTranscriptionInfo] = useState<{
     duration?: number;
     language?: string;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const audioInputRef = useRef<HTMLInputElement>(null);
 
-  const handleTextFileRead = useCallback((file: File) => {
-    if (!file.name.endsWith(".txt")) {
-      setError("Please upload a .txt file");
+  const isAudioOrVideo = (file: File) => {
+    const audioVideoTypes = [
+      "audio/mpeg", "audio/mp3", "audio/mp4", "audio/m4a",
+      "audio/wav", "audio/webm", "audio/ogg", "audio/x-m4a",
+      "video/mp4", "video/webm", "video/quicktime",
+    ];
+    return audioVideoTypes.some(t => file.type.includes(t.split("/")[1])) ||
+      file.name.match(/\.(mp3|m4a|wav|webm|ogg|mp4|mov)$/i);
+  };
+
+  const isTextFile = (file: File) => {
+    return file.type === "text/plain" || file.name.endsWith(".txt");
+  };
+
+  const handleFile = useCallback(async (file: File) => {
+    setError(null);
+
+    // Handle text files
+    if (isTextFile(file)) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        if (text.length > MAX_CHARS) {
+          setError(`File exceeds maximum length of ${MAX_CHARS.toLocaleString()} characters`);
+          return;
+        }
+        setTranscript(text);
+        setUploadedFile(file);
+        setTranscriptionInfo(null);
+      };
+      reader.onerror = () => setError("Failed to read file");
+      reader.readAsText(file);
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      if (text.length > MAX_CHARS) {
-        setError(
-          `File exceeds maximum length of ${MAX_CHARS.toLocaleString()} characters`
-        );
+    // Handle audio/video files
+    if (isAudioOrVideo(file)) {
+      if (file.size > MAX_FILE_SIZE) {
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+        setError(`File too large (${sizeMB}MB). Maximum size is 25MB due to OpenAI API limits.`);
         return;
       }
-      setTranscript(text);
-      setError(null);
-    };
-    reader.onerror = () => {
-      setError("Failed to read file");
-    };
-    reader.readAsText(file);
-  }, []);
 
-  const handleAudioFile = useCallback(async (file: File) => {
-    // Validate audio/video type
-    const validTypes = [
-      "audio/mpeg",
-      "audio/mp3",
-      "audio/mp4",
-      "audio/m4a",
-      "audio/wav",
-      "audio/webm",
-      "audio/ogg",
-      "audio/x-m4a",
-      "video/mp4",
-      "video/webm",
-    ];
+      setUploadedFile(file);
+      setTranscript("");
+      setTranscriptionInfo(null);
+      setIsTranscribing(true);
 
-    const isValid = validTypes.some((t) => {
-      const [type, subtype] = t.split("/");
-      return file.type.startsWith(type) && file.type.includes(subtype);
-    }) || file.name.match(/\.(mp3|m4a|wav|webm|ogg|mp4)$/i);
+      try {
+        const formData = new FormData();
+        formData.append("audio", file);
 
-    if (!isValid) {
-      setError("Please upload an audio or video file (MP3, MP4, M4A, WAV, WebM, or OGG)");
-      return;
-    }
+        const response = await fetch("/api/transcribe", {
+          method: "POST",
+          body: formData,
+        });
 
-    if (file.size > MAX_AUDIO_SIZE) {
-      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-      setError(`File too large (${sizeMB}MB). Maximum size is 25MB due to OpenAI API limits.`);
-      return;
-    }
-
-    setAudioFile(file);
-    setError(null);
-    setTranscript("");
-    setTranscriptionInfo(null);
-
-    // Automatically start transcription
-    setIsTranscribing(true);
-
-    try {
-      const formData = new FormData();
-      formData.append("audio", file);
-
-      const response = await fetch("/api/transcribe", {
-        method: "POST",
-        body: formData,
-      });
-
-      // Handle non-JSON responses (like "Request Entity Too Large")
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await response.text();
-        throw new Error(text || `Server error: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Transcription failed");
-      }
-
-      setTranscript(data.transcript);
-      setTranscriptionInfo({
-        duration: data.duration,
-        language: data.language,
-      });
-      setError(null);
-    } catch (err) {
-      console.error("Transcription error:", err);
-      const message = err instanceof Error ? err.message : "Failed to transcribe audio";
-      // Provide user-friendly error messages
-      if (message.includes("Entity Too Large") || message.includes("too large")) {
-        setError("File too large. Please use a file under 32MB.");
-      } else if (message.includes("timeout") || message.includes("Timeout")) {
-        setError("Transcription timed out. Try a shorter recording.");
-      } else {
-        setError(message);
-      }
-      setAudioFile(null);
-    } finally {
-      setIsTranscribing(false);
-    }
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-
-      const file = e.dataTransfer.files[0];
-      if (file) {
-        if (uploadMode === "audio" || file.type.startsWith("audio/")) {
-          setUploadMode("audio");
-          handleAudioFile(file);
-        } else {
-          handleTextFileRead(file);
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+          const text = await response.text();
+          throw new Error(text || `Server error: ${response.status}`);
         }
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Transcription failed");
+        }
+
+        setTranscript(data.transcript);
+        setTranscriptionInfo({
+          duration: data.duration,
+          language: data.language,
+        });
+      } catch (err) {
+        console.error("Transcription error:", err);
+        const message = err instanceof Error ? err.message : "Failed to transcribe";
+        if (message.includes("Entity Too Large") || message.includes("too large")) {
+          setError("File too large. Please use a file under 25MB.");
+        } else if (message.includes("timeout") || message.includes("Timeout")) {
+          setError("Transcription timed out. Try a shorter recording.");
+        } else {
+          setError(message);
+        }
+        setUploadedFile(null);
+      } finally {
+        setIsTranscribing(false);
       }
-    },
-    [uploadMode, handleAudioFile, handleTextFileRead]
-  );
+      return;
+    }
+
+    setError("Unsupported file type. Please upload audio, video, or text files.");
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  }, [handleFile]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -168,29 +139,12 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
     setIsDragging(false);
   }, []);
 
-  const handleFileInput = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        handleTextFileRead(file);
-      }
-    },
-    [handleTextFileRead]
-  );
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+  }, [handleFile]);
 
-  const handleAudioInput = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        handleAudioFile(file);
-      }
-    },
-    [handleAudioFile]
-  );
-
-  const handleTranscriptChange = (
-    e: React.ChangeEvent<HTMLTextAreaElement>
-  ) => {
+  const handleTranscriptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     if (value.length <= MAX_CHARS) {
       setTranscript(value);
@@ -239,8 +193,38 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
+  const clearUpload = () => {
+    setTranscript("");
+    setUploadedFile(null);
+    setTranscriptionInfo(null);
+    setError(null);
+  };
+
   const charCount = transcript.length;
   const charPercentage = (charCount / MAX_CHARS) * 100;
+
+  const getFileIcon = () => {
+    if (!uploadedFile) return null;
+    if (uploadedFile.type.startsWith("video/")) {
+      return (
+        <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+      );
+    }
+    if (uploadedFile.type.startsWith("audio/")) {
+      return (
+        <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+        </svg>
+      );
+    }
+    return (
+      <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    );
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -265,178 +249,9 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
         />
       </div>
 
-      {/* Upload Mode Tabs */}
+      {/* Unified File Upload Zone */}
       <div>
-        <label className="label">Session Recording</label>
-        <div className="flex gap-2 mb-3">
-          <button
-            type="button"
-            onClick={() => setUploadMode("audio")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              uploadMode === "audio"
-                ? "bg-primary-600 text-white"
-                : "bg-sage-100 text-sage-700 hover:bg-sage-200"
-            }`}
-          >
-            <span className="flex items-center gap-2">
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-                />
-              </svg>
-              Audio Upload
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setUploadMode("text")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              uploadMode === "text"
-                ? "bg-primary-600 text-white"
-                : "bg-sage-100 text-sage-700 hover:bg-sage-200"
-            }`}
-          >
-            <span className="flex items-center gap-2">
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-              Text Transcript
-            </span>
-          </button>
-        </div>
-
-        {/* Audio Upload Zone */}
-        {uploadMode === "audio" && (
-          <Card
-            className={`mb-3 border-2 border-dashed transition-colors ${
-              isDragging
-                ? "border-primary-500 bg-primary-50"
-                : "border-sage-300 hover:border-sage-400"
-            }`}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-          >
-            <CardContent className="py-8 text-center">
-              <input
-                ref={audioInputRef}
-                type="file"
-                accept="audio/*,video/mp4,video/webm,.mp3,.m4a,.wav,.webm,.ogg,.mp4"
-                onChange={handleAudioInput}
-                className="hidden"
-              />
-
-              {isTranscribing ? (
-                <div className="flex flex-col items-center">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600 mb-4" />
-                  <p className="text-sage-600 font-medium">
-                    Transcribing audio...
-                  </p>
-                  <p className="text-sm text-sage-500 mt-1">
-                    This may take a minute for longer recordings
-                  </p>
-                </div>
-              ) : audioFile && transcript ? (
-                <div className="flex flex-col items-center">
-                  <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center mb-3">
-                    <svg
-                      className="w-6 h-6 text-primary-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                  </div>
-                  <p className="text-sage-800 font-medium">{audioFile.name}</p>
-                  <div className="flex gap-4 mt-2 text-sm text-sage-500">
-                    {transcriptionInfo?.duration && (
-                      <span>
-                        Duration: {formatDuration(transcriptionInfo.duration)}
-                      </span>
-                    )}
-                    {transcriptionInfo?.language && (
-                      <span>
-                        Language: {transcriptionInfo.language.toUpperCase()}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAudioFile(null);
-                      setTranscript("");
-                      setTranscriptionInfo(null);
-                    }}
-                    className="mt-3 text-sm text-sage-500 hover:text-sage-700"
-                  >
-                    Remove and upload different file
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="text-sage-400 mb-3">
-                    <svg
-                      className="w-12 h-12 mx-auto"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-                      />
-                    </svg>
-                  </div>
-                  <p className="text-sage-600 mb-1">
-                    Drag and drop an audio file here, or{" "}
-                    <button
-                      type="button"
-                      onClick={() => audioInputRef.current?.click()}
-                      className="text-primary-600 hover:text-primary-700 font-medium"
-                    >
-                      browse
-                    </button>
-                  </p>
-                  <p className="text-xs text-sage-400">
-                    Supports MP3, MP4, M4A, WAV, WebM, OGG (max 25MB)
-                  </p>
-                  <p className="text-xs text-sage-400 mt-1">
-                    Audio will be automatically transcribed using AI
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Text Upload Zone */}
-        {uploadMode === "text" && (
+        <label className="label">Session Recording or Transcript</label>
         <Card
           className={`mb-3 border-2 border-dashed transition-colors ${
             isDragging
@@ -447,61 +262,84 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
         >
-          <CardContent className="py-6 text-center">
+          <CardContent className="py-8 text-center">
             <input
               ref={fileInputRef}
               type="file"
-              accept=".txt"
+              accept="audio/*,video/*,.txt,text/plain"
               onChange={handleFileInput}
               className="hidden"
             />
-            <div className="text-sage-400 mb-2">
-              <svg
-                className="w-10 h-10 mx-auto"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                />
-              </svg>
-            </div>
-            <p className="text-sage-600 mb-1">
-              Drag and drop a .txt file here, or{" "}
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="text-primary-600 hover:text-primary-700 font-medium"
-              >
-                browse
-              </button>
-            </p>
-            <p className="text-xs text-sage-400">
-              Maximum {MAX_CHARS.toLocaleString()} characters
-            </p>
+
+            {isTranscribing ? (
+              <div className="flex flex-col items-center">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600 mb-4" />
+                <p className="text-sage-600 font-medium">Transcribing...</p>
+                <p className="text-sm text-sage-500 mt-1">
+                  This may take a minute for longer recordings
+                </p>
+              </div>
+            ) : uploadedFile && transcript ? (
+              <div className="flex flex-col items-center">
+                <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center mb-3">
+                  {getFileIcon()}
+                </div>
+                <p className="text-sage-800 font-medium">{uploadedFile.name}</p>
+                {transcriptionInfo && (
+                  <div className="flex gap-4 mt-2 text-sm text-sage-500">
+                    {transcriptionInfo.duration && (
+                      <span>Duration: {formatDuration(transcriptionInfo.duration)}</span>
+                    )}
+                    {transcriptionInfo.language && (
+                      <span>Language: {transcriptionInfo.language.toUpperCase()}</span>
+                    )}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={clearUpload}
+                  className="mt-3 text-sm text-sage-500 hover:text-sage-700"
+                >
+                  Remove and upload different file
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="text-sage-400 mb-3">
+                  <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                </div>
+                <p className="text-sage-600 mb-1">
+                  Drag and drop a file here, or{" "}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-primary-600 hover:text-primary-700 font-medium"
+                  >
+                    browse
+                  </button>
+                </p>
+                <p className="text-xs text-sage-400">
+                  Audio/Video (MP3, MP4, M4A, WAV, WebM) or Text (.txt)
+                </p>
+                <p className="text-xs text-sage-400 mt-1">
+                  Audio/video files are automatically transcribed • Max 25MB
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
-        )}
 
         {/* Transcript Preview/Edit */}
         <div className="relative">
           <label className="text-sm font-medium text-sage-600 mb-1 block">
-            {uploadMode === "audio" && transcript
-              ? "Transcription (editable)"
-              : "Transcript"}
+            {uploadedFile && transcriptionInfo ? "Transcription (editable)" : "Transcript"}
           </label>
           <textarea
             value={transcript}
             onChange={handleTranscriptChange}
-            placeholder={
-              uploadMode === "audio"
-                ? "Upload an audio file to generate transcript..."
-                : "Or paste the session transcript here..."
-            }
+            placeholder="Upload a file above or paste/type the transcript here..."
             className="input min-h-[300px] font-mono text-sm resize-y"
             disabled={isTranscribing}
           />
@@ -512,11 +350,8 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
               <div className="w-32 h-2 bg-sage-200 rounded-full overflow-hidden">
                 <div
                   className={`h-full transition-all ${
-                    charPercentage > 90
-                      ? "bg-red-500"
-                      : charPercentage > 70
-                      ? "bg-amber-500"
-                      : "bg-primary-500"
+                    charPercentage > 90 ? "bg-red-500" :
+                    charPercentage > 70 ? "bg-amber-500" : "bg-primary-500"
                   }`}
                   style={{ width: `${Math.min(charPercentage, 100)}%` }}
                 />
@@ -528,11 +363,7 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
             {transcript && (
               <button
                 type="button"
-                onClick={() => {
-                  setTranscript("");
-                  setAudioFile(null);
-                  setTranscriptionInfo(null);
-                }}
+                onClick={clearUpload}
                 className="text-sage-500 hover:text-sage-700"
               >
                 Clear

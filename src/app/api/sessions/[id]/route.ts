@@ -61,6 +61,9 @@ export async function GET(
         summary_client,
         key_themes,
         progress_notes,
+        video_url,
+        video_filename,
+        video_duration_seconds,
         client_profiles!sessions_client_id_fkey (
           id,
           therapist_id,
@@ -110,6 +113,9 @@ export async function GET(
         summary_client: session.summary_client,
         key_themes: session.key_themes,
         progress_notes: session.progress_notes,
+        video_url: session.video_url,
+        video_filename: session.video_filename,
+        video_duration_seconds: session.video_duration_seconds,
         client: {
           id: clientProfile?.id,
           name: clientProfile?.users?.name || "Unknown",
