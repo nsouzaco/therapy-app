@@ -288,9 +288,9 @@ Therapists can manage their clients and upload session transcripts. No AI genera
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] `npm run build` completes without errors
-- [ ] `npm run lint` passes
-- [ ] API routes return correct status codes
+- [x] `npm run build` completes without errors
+- [x] `npm run lint` passes
+- [x] API routes return correct status codes
 
 #### Manual Verification:
 - [ ] Therapist can add a new client from dashboard
