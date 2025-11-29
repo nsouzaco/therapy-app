@@ -110,14 +110,18 @@ export default function RegisterPage() {
       if (role === "client" && therapistId) {
         const { error: profileError } = await supabase
           .from("client_profiles")
-          .insert({
+          .upsert({
             user_id: authData.user.id,
             therapist_id: therapistId,
-          });
+          }, { onConflict: "user_id" });
 
         if (profileError) {
           console.error("Error creating client profile:", profileError);
         }
+      } else if (role === "client" && !therapistId) {
+        console.error("Client registration failed: therapist profile ID not found");
+        setError("Unable to link to therapist. Please contact support.");
+        return;
       }
 
       // Redirect based on role
