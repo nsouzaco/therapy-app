@@ -80,6 +80,10 @@ ALTER TABLE public.plan_versions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view own data" ON public.users
   FOR SELECT USING (auth.uid() = id);
 
+-- Allow anyone to look up therapists by email (for client registration)
+CREATE POLICY "Anyone can find therapists" ON public.users
+  FOR SELECT USING (role = 'therapist');
+
 CREATE POLICY "Users can update own data" ON public.users
   FOR UPDATE USING (auth.uid() = id);
 
@@ -90,6 +94,10 @@ CREATE POLICY "Users can insert own data" ON public.users
 -- Therapist profiles: Therapists can manage their own profile
 CREATE POLICY "Therapists can view own profile" ON public.therapist_profiles
   FOR SELECT USING (auth.uid() = user_id);
+
+-- Allow anyone to look up therapist profiles (for client registration)
+CREATE POLICY "Anyone can find therapist profiles" ON public.therapist_profiles
+  FOR SELECT USING (true);
 
 CREATE POLICY "Therapists can insert own profile" ON public.therapist_profiles
   FOR INSERT WITH CHECK (auth.uid() = user_id);
