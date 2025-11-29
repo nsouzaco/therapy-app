@@ -32,9 +32,18 @@ export default function LoginPage() {
         return;
       }
 
-      // Get user role to redirect appropriately
+      // Get user and ensure profile is set up
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        // Call complete-registration to ensure profiles are created
+        // (handles case where email confirmation was required)
+        const therapistEmail = user.user_metadata?.therapist_email;
+        await fetch("/api/auth/complete-registration", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ therapist_email: therapistEmail }),
+        });
+
         const { data: userData } = await supabase
           .from("users")
           .select("role")

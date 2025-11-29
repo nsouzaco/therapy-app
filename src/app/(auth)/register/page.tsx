@@ -56,7 +56,7 @@ export default function RegisterPage() {
         }
       }
 
-      // Create auth user with metadata
+      // Create auth user with metadata (including therapist_email for clients)
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -64,6 +64,7 @@ export default function RegisterPage() {
           data: {
             name,
             role,
+            ...(role === "client" && therapistEmail ? { therapist_email: therapistEmail } : {}),
           },
         },
       });
