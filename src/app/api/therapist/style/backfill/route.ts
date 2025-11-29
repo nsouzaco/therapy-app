@@ -44,10 +44,16 @@ export async function POST() {
     }
 
     // Filter to only this therapist's sessions
+    console.log("All sessions found:", sessions?.length);
+    console.log("Sample session:", sessions?.[0]);
+    
     const therapistSessions = sessions?.filter((s) => {
       const clientProfile = s.client_profiles as unknown as { therapist_id: string } | null;
+      console.log("Session", s.id, "clientProfile:", clientProfile, "therapistId:", therapistProfile.id);
       return clientProfile?.therapist_id === therapistProfile.id;
     }) || [];
+    
+    console.log("Therapist sessions after filter:", therapistSessions.length);
 
     if (therapistSessions.length === 0) {
       return NextResponse.json({
@@ -57,10 +63,12 @@ export async function POST() {
     }
 
     // Check which sessions already have extractions
-    const { data: existingExtractions } = await supabase
+    const { data: existingExtractions, error: extractionsError } = await supabase
       .from("session_style_extractions")
       .select("session_id")
       .eq("therapist_id", therapistProfile.id);
+
+    console.log("Existing extractions query:", existingExtractions?.length || 0, "Error:", extractionsError?.message);
 
     const existingSessionIds = new Set(existingExtractions?.map((e) => e.session_id) || []);
     const sessionsToProcess = therapistSessions.filter((s) => !existingSessionIds.has(s.id));
@@ -99,12 +107,17 @@ export async function POST() {
     let processed = 0;
     const errors: string[] = [];
 
+    console.log("Sessions to process:", sessionsToProcess.length, "Processing up to:", toProcess.length);
+    
     for (const session of toProcess) {
       try {
+        console.log("Extracting style from session:", session.id);
         const result = await extractTherapistStyle(session.transcript_text);
+        console.log("Extraction result:", result.success ? "success" : result.error);
         
         if (result.success) {
-          await supabase
+          console.log("Saving extraction to database...");
+          const { error: upsertError } = await supabase
             .from("session_style_extractions")
             .upsert({
               session_id: session.id,
@@ -117,14 +130,23 @@ export async function POST() {
               detected_tone: result.extraction.communication.tone,
             }, { onConflict: "session_id" });
           
-          processed++;
+          if (upsertError) {
+            console.error("Upsert error:", upsertError);
+            errors.push(`Session ${session.id}: DB error - ${upsertError.message}`);
+          } else {
+            console.log("Extraction saved successfully");
+            processed++;
+          }
         } else {
           errors.push(`Session ${session.id}: ${result.error}`);
         }
       } catch (err) {
+        console.error("Error processing session:", err);
         errors.push(`Session ${session.id}: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
     }
+    
+    console.log("Processed:", processed, "Errors:", errors);
 
     // Re-aggregate the therapist's style profile
     const { data: allExtractions } = await supabase

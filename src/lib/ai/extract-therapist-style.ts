@@ -97,13 +97,20 @@ export async function extractTherapistStyle(
   try {
     const openai = getOpenAIClient();
 
-    // Extract only therapist portions for analysis
-    const therapistText = extractTherapistSpeech(transcript);
+    // Try to extract therapist portions, but fall back to full transcript
+    let textToAnalyze = extractTherapistSpeech(transcript);
     
-    if (therapistText.length < 200) {
+    // If speaker labels aren't found, use the full transcript
+    // The AI prompt instructs it to focus on therapist speech patterns
+    if (textToAnalyze.length < 200) {
+      textToAnalyze = transcript;
+    }
+    
+    // Still need minimum content to analyze
+    if (textToAnalyze.length < 500) {
       return {
         success: false,
-        error: "Insufficient therapist speech in transcript for style analysis",
+        error: "Transcript too short for style analysis (need at least 500 characters)",
       };
     }
 
@@ -113,7 +120,7 @@ export async function extractTherapistStyle(
         { role: "system", content: STYLE_EXTRACTION_PROMPT },
         {
           role: "user",
-          content: `Analyze this therapist's clinical style from the following transcript:\n\n${transcript}`,
+          content: `Analyze this therapist's clinical style from the following transcript:\n\n${textToAnalyze}`,
         },
       ],
       response_format: { type: "json_object" },
