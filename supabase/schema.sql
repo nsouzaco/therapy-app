@@ -83,9 +83,16 @@ CREATE POLICY "Users can view own data" ON public.users
 CREATE POLICY "Users can update own data" ON public.users
   FOR UPDATE USING (auth.uid() = id);
 
+-- Allow authenticated users to insert their own user record (backup for trigger)
+CREATE POLICY "Users can insert own data" ON public.users
+  FOR INSERT WITH CHECK (auth.uid() = id);
+
 -- Therapist profiles: Therapists can manage their own profile
 CREATE POLICY "Therapists can view own profile" ON public.therapist_profiles
   FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Therapists can insert own profile" ON public.therapist_profiles
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Therapists can update own profile" ON public.therapist_profiles
   FOR UPDATE USING (auth.uid() = user_id);
@@ -105,6 +112,10 @@ CREATE POLICY "Therapists can create clients" ON public.client_profiles
       SELECT id FROM public.therapist_profiles WHERE user_id = auth.uid()
     )
   );
+
+-- Allow clients to create their own profile during registration
+CREATE POLICY "Clients can insert own profile" ON public.client_profiles
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 -- Sessions: Therapists can manage their clients' sessions, clients can view their own
 CREATE POLICY "Therapists can manage client sessions" ON public.sessions
