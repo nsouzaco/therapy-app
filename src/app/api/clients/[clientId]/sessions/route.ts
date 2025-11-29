@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { generateSessionSummary } from "@/lib/ai/generate-summary";
 
 // GET /api/clients/[clientId]/sessions - List sessions for a client
 export async function GET(
@@ -156,6 +157,23 @@ export async function POST(
         { status: 500 }
       );
     }
+
+    // Generate session summaries asynchronously (don't block response)
+    generateSessionSummary(transcript_text)
+      .then(async (summary) => {
+        if (summary) {
+          await supabase
+            .from("sessions")
+            .update({
+              summary_therapist: summary.therapist_summary,
+              summary_client: summary.client_summary,
+              key_themes: summary.key_themes,
+              progress_notes: summary.progress_notes,
+            })
+            .eq("id", session.id);
+        }
+      })
+      .catch((err) => console.error("Summary generation failed:", err));
 
     return NextResponse.json({
       message: "Session created successfully",

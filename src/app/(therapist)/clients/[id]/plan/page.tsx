@@ -38,6 +38,7 @@ export default function PlanPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
 
   const fetchPlan = useCallback(async () => {
     try {
@@ -95,6 +96,33 @@ export default function PlanPage() {
       console.error("Failed to update plan:", error);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!plan?.current_version) return;
+
+    setIsApproving(true);
+    try {
+      const response = await fetch(
+        `/api/plans/${plan.id}/versions/${plan.current_version.id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "approved" }),
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setPlan((prev) =>
+          prev ? { ...prev, current_version: data.version } : null
+        );
+      }
+    } catch (error) {
+      console.error("Failed to approve plan:", error);
+    } finally {
+      setIsApproving(false);
     }
   };
 
@@ -197,6 +225,55 @@ export default function PlanPage() {
               >
                 {plan.current_version.status === "approved" ? "Approved" : "Draft"}
               </span>
+            )}
+            {plan?.current_version?.status === "draft" && (
+              <Button
+                onClick={handleApprove}
+                disabled={isApproving}
+                variant="primary"
+              >
+                {isApproving ? (
+                  <>
+                    <svg
+                      className="w-4 h-4 mr-2 animate-spin"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Approving...
+                  </>
+                ) : (
+                  <>
+                    <svg
+                      className="w-4 h-4 mr-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                    Approve & Share
+                  </>
+                )}
+              </Button>
             )}
             <GenerateButton
               clientId={clientId}

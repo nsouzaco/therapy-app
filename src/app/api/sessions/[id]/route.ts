@@ -29,6 +29,10 @@ export async function GET(
         transcript_text,
         created_at,
         client_id,
+        summary_therapist,
+        summary_client,
+        key_themes,
+        progress_notes,
         client_profiles!sessions_client_id_fkey (
           id,
           therapist_id,
@@ -74,6 +78,10 @@ export async function GET(
         transcript_text: session.transcript_text,
         transcript_length: session.transcript_text.length,
         created_at: session.created_at,
+        summary_therapist: session.summary_therapist,
+        summary_client: session.summary_client,
+        key_themes: session.key_themes,
+        progress_notes: session.progress_notes,
         client: {
           id: clientProfile?.id,
           name: clientProfile?.users?.name || "Unknown",

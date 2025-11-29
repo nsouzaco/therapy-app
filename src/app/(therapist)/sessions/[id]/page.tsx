@@ -13,6 +13,10 @@ interface Session {
   transcript_text: string;
   transcript_length: number;
   created_at: string;
+  summary_therapist?: string;
+  summary_client?: string;
+  key_themes?: string[];
+  progress_notes?: string;
   client: {
     id: string;
     name: string;
@@ -27,6 +31,7 @@ export default function SessionDetailPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"summary" | "transcript">("summary");
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -37,6 +42,10 @@ export default function SessionDetailPage() {
         }
         const data = await response.json();
         setSession(data.session);
+        // Default to transcript if no summary
+        if (!data.session.summary_therapist) {
+          setActiveTab("transcript");
+        }
       } catch {
         setError("Failed to load session details");
       } finally {
@@ -74,6 +83,8 @@ export default function SessionDetailPage() {
       </div>
     );
   }
+
+  const hasSummary = session.summary_therapist || session.summary_client;
 
   return (
     <div>
@@ -139,18 +150,113 @@ export default function SessionDetailPage() {
         </Card>
       </div>
 
-      {/* Transcript */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Transcript</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="bg-sage-50 rounded-lg p-6 font-mono text-sm whitespace-pre-wrap text-sage-800 max-h-[600px] overflow-y-auto">
-            {session.transcript_text}
+      {/* Key Themes */}
+      {session.key_themes && session.key_themes.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-sm font-medium text-sage-600 mb-2">Key Themes</h3>
+          <div className="flex flex-wrap gap-2">
+            {session.key_themes.map((theme, index) => (
+              <span
+                key={index}
+                className="px-3 py-1 bg-primary-50 text-primary-700 rounded-full text-sm"
+              >
+                {theme}
+              </span>
+            ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
+
+      {/* Tabs */}
+      {hasSummary && (
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setActiveTab("summary")}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === "summary"
+                ? "bg-primary-600 text-white"
+                : "bg-sage-100 text-sage-700 hover:bg-sage-200"
+            }`}
+          >
+            Session Summary
+          </button>
+          <button
+            onClick={() => setActiveTab("transcript")}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === "transcript"
+                ? "bg-primary-600 text-white"
+                : "bg-sage-100 text-sage-700 hover:bg-sage-200"
+            }`}
+          >
+            Full Transcript
+          </button>
+        </div>
+      )}
+
+      {/* Summary Tab */}
+      {activeTab === "summary" && hasSummary && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Therapist Summary */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-xs font-medium px-2 py-0.5 bg-sage-100 text-sage-600 rounded">
+                  Clinical
+                </span>
+                Session Summary
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="prose prose-sage prose-sm max-w-none">
+                <p className="text-sage-700 whitespace-pre-wrap">
+                  {session.summary_therapist || "Summary not yet generated."}
+                </p>
+              </div>
+              {session.progress_notes && (
+                <div className="mt-4 pt-4 border-t border-sage-200">
+                  <h4 className="text-sm font-medium text-sage-600 mb-2">
+                    Progress Notes
+                  </h4>
+                  <p className="text-sm text-sage-700">{session.progress_notes}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Client Summary */}
+          <Card className="bg-primary-50/30 border-primary-100">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-xs font-medium px-2 py-0.5 bg-primary-100 text-primary-700 rounded">
+                  Client-Facing
+                </span>
+                What We Worked On
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="prose prose-sage prose-sm max-w-none">
+                <p className="text-sage-700 whitespace-pre-wrap">
+                  {session.summary_client || "Summary not yet generated."}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Transcript Tab */}
+      {(activeTab === "transcript" || !hasSummary) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Transcript</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-sage-50 rounded-lg p-6 font-mono text-sm whitespace-pre-wrap text-sage-800 max-h-[600px] overflow-y-auto">
+              {session.transcript_text}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
-
