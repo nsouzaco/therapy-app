@@ -10,7 +10,7 @@ interface SessionUploadProps {
 }
 
 const MAX_CHARS = 50000;
-const MAX_AUDIO_SIZE = 25 * 1024 * 1024; // 25MB
+const MAX_AUDIO_SIZE = 32 * 1024 * 1024; // 32MB
 
 type UploadMode = "text" | "audio";
 
@@ -57,7 +57,7 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
   }, []);
 
   const handleAudioFile = useCallback(async (file: File) => {
-    // Validate audio type
+    // Validate audio/video type
     const validTypes = [
       "audio/mpeg",
       "audio/mp3",
@@ -67,15 +67,22 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
       "audio/webm",
       "audio/ogg",
       "audio/x-m4a",
+      "video/mp4",
+      "video/webm",
     ];
 
-    if (!validTypes.some((t) => file.type.includes(t.split("/")[1]))) {
-      setError("Please upload an audio file (MP3, M4A, WAV, WebM, or OGG)");
+    const isValid = validTypes.some((t) => {
+      const [type, subtype] = t.split("/");
+      return file.type.startsWith(type) && file.type.includes(subtype);
+    }) || file.name.match(/\.(mp3|m4a|wav|webm|ogg|mp4)$/i);
+
+    if (!isValid) {
+      setError("Please upload an audio or video file (MP3, MP4, M4A, WAV, WebM, or OGG)");
       return;
     }
 
     if (file.size > MAX_AUDIO_SIZE) {
-      setError("Audio file too large. Maximum size is 25MB.");
+      setError("File too large. Maximum size is 32MB.");
       return;
     }
 
@@ -317,7 +324,7 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
               <input
                 ref={audioInputRef}
                 type="file"
-                accept="audio/*,.mp3,.m4a,.wav,.webm,.ogg"
+                accept="audio/*,video/mp4,video/webm,.mp3,.m4a,.wav,.webm,.ogg,.mp4"
                 onChange={handleAudioInput}
                 className="hidden"
               />
@@ -402,7 +409,7 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
                     </button>
                   </p>
                   <p className="text-xs text-sage-400">
-                    Supports MP3, M4A, WAV, WebM, OGG (max 25MB)
+                    Supports MP3, MP4, M4A, WAV, WebM, OGG (max 32MB)
                   </p>
                   <p className="text-xs text-sage-400 mt-1">
                     Audio will be automatically transcribed using AI

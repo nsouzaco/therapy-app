@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOpenAIClient } from "@/lib/ai/openai-client";
 
-// Supported audio formats
+// Supported audio/video formats
 const SUPPORTED_FORMATS = [
   "audio/mpeg",
   "audio/mp3",
@@ -11,9 +11,11 @@ const SUPPORTED_FORMATS = [
   "audio/wav",
   "audio/webm",
   "audio/ogg",
+  "video/mp4",
+  "video/webm",
 ];
 
-const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB (Whisper limit)
+const MAX_FILE_SIZE = 32 * 1024 * 1024; // 32MB
 
 // POST /api/transcribe - Transcribe audio file using OpenAI Whisper
 export async function POST(request: NextRequest) {
@@ -44,7 +46,7 @@ export async function POST(request: NextRequest) {
     if (!SUPPORTED_FORMATS.includes(audioFile.type)) {
       return NextResponse.json(
         {
-          error: `Unsupported audio format. Supported: MP3, MP4, M4A, WAV, WebM, OGG`,
+          error: `Unsupported format. Supported: MP3, MP4, M4A, WAV, WebM, OGG`,
         },
         { status: 400 }
       );
@@ -53,7 +55,7 @@ export async function POST(request: NextRequest) {
     // Validate file size
     if (audioFile.size > MAX_FILE_SIZE) {
       return NextResponse.json(
-        { error: "Audio file too large. Maximum size is 25MB." },
+        { error: "File too large. Maximum size is 32MB." },
         { status: 400 }
       );
     }

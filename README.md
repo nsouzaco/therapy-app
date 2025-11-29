@@ -185,7 +185,8 @@ Results are merged, with the higher severity level taking precedence.
 ### Audio Transcription
 
 Uses OpenAI Whisper for speech-to-text:
-- Supports MP3, M4A, WAV, WebM, OGG (max 25MB)
+- Supports MP3, MP4, M4A, WAV, WebM, OGG (max 32MB)
+- Video files (MP4) also supported for audio extraction
 - Returns transcript with timestamps and language detection
 - Editable before saving
 
