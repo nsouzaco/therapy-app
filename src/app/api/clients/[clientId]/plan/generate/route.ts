@@ -36,7 +36,7 @@ export async function POST(
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
-    // Verify therapist owns this client
+    // Verify therapist owns this client and get their style profile
     const { data: therapistProfile } = await supabase
       .from("therapist_profiles")
       .select("id")
@@ -46,6 +46,13 @@ export async function POST(
     if (!therapistProfile || clientProfile.therapist_id !== therapistProfile.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
+
+    // Get therapist's style profile for personalized generation
+    const { data: styleProfile } = await supabase
+      .from("therapist_style_profiles")
+      .select("*")
+      .eq("therapist_id", therapistProfile.id)
+      .single();
 
     // Get the session transcript (either specified or latest)
     let sessionQuery = supabase
@@ -91,10 +98,11 @@ export async function POST(
       }
     }
 
-    // Generate plan using AI
+    // Generate plan using AI (with therapist style if available)
     const result = await generatePlan({
       transcript: session.transcript_text,
       existingPlan: existingContent,
+      therapistStyle: styleProfile || null,
     });
 
     if (!result.success || !result.content) {

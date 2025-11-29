@@ -1,12 +1,13 @@
 import type { PlanContent } from "@/lib/types/plan";
 import { callOpenAI } from "./openai-client";
-import { SYSTEM_PROMPT, buildUserPrompt } from "./prompts";
+import { SYSTEM_PROMPT, buildUserPrompt, buildStyleContext, TherapistStyleProfile } from "./prompts";
 import { parsePlanResponse } from "./parse-response";
 import { scanForRisks, mergeRiskFactors } from "./risk-detection";
 
 export interface GeneratePlanOptions {
   transcript: string;
   existingPlan?: PlanContent;
+  therapistStyle?: TherapistStyleProfile | null;
 }
 
 export interface GeneratePlanResult {
@@ -21,7 +22,7 @@ export interface GeneratePlanResult {
 export async function generatePlan(
   options: GeneratePlanOptions
 ): Promise<GeneratePlanResult> {
-  const { transcript, existingPlan } = options;
+  const { transcript, existingPlan, therapistStyle } = options;
 
   if (!transcript || transcript.trim().length === 0) {
     return { success: false, error: "Transcript is empty" };
@@ -31,12 +32,16 @@ export async function generatePlan(
     // Run keyword scan for risk detection (backup to AI)
     const keywordRiskScan = scanForRisks(transcript);
 
+    // Build system prompt with therapist style context
+    const styleContext = buildStyleContext(therapistStyle || null);
+    const systemPrompt = SYSTEM_PROMPT + styleContext;
+
     // Call OpenAI to generate the plan
     const response = await callOpenAI(async (client) => {
       const completion = await client.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: systemPrompt },
           { role: "user", content: buildUserPrompt(transcript, existingPlan) },
         ],
         temperature: 0.7,

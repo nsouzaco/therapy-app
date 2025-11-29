@@ -35,6 +35,12 @@ export default function TherapistLayout({
                 >
                   Dashboard
                 </Link>
+                <Link 
+                  href="/settings" 
+                  className="text-sage-600 hover:text-sage-900 font-medium"
+                >
+                  Settings
+                </Link>
               </nav>
             </div>
             <div className="flex items-center gap-4">

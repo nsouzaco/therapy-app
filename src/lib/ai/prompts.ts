@@ -1,5 +1,60 @@
 import type { PlanContent } from "@/lib/types/plan";
 
+// Therapist style profile type (matches database schema)
+export interface TherapistStyleProfile {
+  primary_modality: string | null;
+  secondary_modalities: string[];
+  common_interventions: string[];
+  homework_style: string | null;
+  tone: string | null;
+  pacing: string | null;
+  signature_phrases: string[];
+  focus_areas: string[];
+  confidence_score: number;
+}
+
+/**
+ * Build style context to inject into the system prompt
+ */
+export function buildStyleContext(style: TherapistStyleProfile | null): string {
+  if (!style || style.confidence_score < 0.1) {
+    return "";
+  }
+
+  const parts: string[] = [];
+  
+  parts.push("\n## THERAPIST STYLE PROFILE (match this clinical style):");
+  
+  if (style.primary_modality) {
+    const modalities = [style.primary_modality, ...style.secondary_modalities].join(", ");
+    parts.push(`- Primary approach: ${modalities}`);
+  }
+  
+  if (style.common_interventions.length > 0) {
+    parts.push(`- Preferred interventions: ${style.common_interventions.slice(0, 5).join(", ")}`);
+  }
+  
+  if (style.homework_style) {
+    parts.push(`- Homework style: ${style.homework_style}`);
+  }
+  
+  if (style.tone) {
+    parts.push(`- Communication tone: ${style.tone}`);
+  }
+  
+  if (style.focus_areas.length > 0) {
+    parts.push(`- Clinical focus: ${style.focus_areas.join(", ")}`);
+  }
+  
+  if (style.signature_phrases.length > 0) {
+    parts.push(`- Signature phrases to incorporate: "${style.signature_phrases.slice(0, 3).join('", "')}"`);
+  }
+  
+  parts.push(`\nAdapt the treatment plan to match this therapist's established clinical style and approach.`);
+  
+  return parts.join("\n");
+}
+
 export const SYSTEM_PROMPT = `You are an AI clinical documentation assistant for licensed therapists. Your role is to analyze therapy session transcripts and generate structured treatment plans.
 
 IMPORTANT GUIDELINES:

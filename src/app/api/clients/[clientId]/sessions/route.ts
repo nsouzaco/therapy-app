@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { generateSessionSummary } from "@/lib/ai/generate-summary";
+import { extractTherapistStyle, mergeStyleExtractions, TherapistStyleExtraction } from "@/lib/ai/extract-therapist-style";
 
 // GET /api/clients/[clientId]/sessions - List sessions for a client
 export async function GET(
@@ -174,6 +175,48 @@ export async function POST(
         }
       })
       .catch((err) => console.error("Summary generation failed:", err));
+
+    // Extract therapist style asynchronously (don't block response)
+    extractTherapistStyle(transcript_text)
+      .then(async (result) => {
+        if (result.success) {
+          // Store the extraction
+          await supabase
+            .from("session_style_extractions")
+            .upsert({
+              session_id: session.id,
+              therapist_id: therapistProfile.id,
+              extraction: result.extraction,
+              detected_modalities: result.extraction.modalities.primary
+                ? [result.extraction.modalities.primary, ...result.extraction.modalities.secondary]
+                : result.extraction.modalities.secondary,
+              detected_interventions: result.extraction.interventions,
+              detected_tone: result.extraction.communication.tone,
+            }, { onConflict: "session_id" });
+
+          // Re-aggregate the therapist's style profile
+          const { data: allExtractions } = await supabase
+            .from("session_style_extractions")
+            .select("extraction")
+            .eq("therapist_id", therapistProfile.id);
+
+          if (allExtractions && allExtractions.length > 0) {
+            const mergedProfile = await mergeStyleExtractions(
+              allExtractions.map((e) => e.extraction as TherapistStyleExtraction)
+            );
+
+            await supabase
+              .from("therapist_style_profiles")
+              .upsert({
+                therapist_id: therapistProfile.id,
+                ...mergedProfile,
+                sessions_analyzed: allExtractions.length,
+                last_extraction_at: new Date().toISOString(),
+              }, { onConflict: "therapist_id" });
+          }
+        }
+      })
+      .catch((err) => console.error("Style extraction failed:", err));
 
     return NextResponse.json({
       message: "Session created successfully",
