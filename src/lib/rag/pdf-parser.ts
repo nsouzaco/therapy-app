@@ -2,9 +2,6 @@
  * PDF and document text extraction utilities
  */
 
-// pdf-parse is a CommonJS module
-import * as pdfParse from "pdf-parse";
-
 export interface ParsedDocument {
   text: string;
   pageCount?: number;
@@ -21,8 +18,9 @@ export interface ParsedDocument {
  */
 export async function parsePDF(buffer: Buffer): Promise<ParsedDocument> {
   try {
-    // Handle both ESM and CommonJS module formats
-    const pdf = typeof pdfParse === "function" ? pdfParse : (pdfParse as { default: typeof pdfParse }).default;
+    // Dynamic import for pdf-parse (CommonJS module)
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdf = require("pdf-parse");
     const data = await pdf(buffer);
     
     return {
