@@ -1,4 +1,4 @@
-import type { PlanContent, Goal, Intervention, Homework, Strength } from "@/lib/types/plan";
+import type { PlanContent, Goal, Intervention, Homework, Strength, Citation } from "@/lib/types/plan";
 
 /**
  * Parse and validate AI response JSON
@@ -89,10 +89,27 @@ function validatePlanContent(data: unknown): PlanContent {
   };
 }
 
+// Helper to validate citations array
+function validateCitations(data: unknown): Citation[] | undefined {
+  if (!Array.isArray(data) || data.length === 0) {
+    return undefined;
+  }
+  const citations = data
+    .map((c) => {
+      const item = (c || {}) as Record<string, unknown>;
+      return {
+        excerpt: String(item.excerpt || ""),
+        context: item.context ? String(item.context) : undefined,
+      };
+    })
+    .filter((c) => c.excerpt.length > 0);
+  return citations.length > 0 ? citations : undefined;
+}
+
 function validateDualContent(
   data: unknown,
   _fieldName: string
-): { clinical: string; client_facing: string } {
+): { clinical: string; client_facing: string; citations?: Citation[] } {
   if (!data || typeof data !== "object") {
     return { clinical: "", client_facing: "" };
   }
@@ -101,6 +118,7 @@ function validateDualContent(
   return {
     clinical: String(obj.clinical || ""),
     client_facing: String(obj.client_facing || ""),
+    citations: validateCitations(obj.citations),
   };
 }
 
@@ -125,6 +143,7 @@ function validateGoal(data: unknown, index: number): Goal {
     goal: String(item.goal || ""),
     target_date: item.target_date ? String(item.target_date) : undefined,
     client_facing: String(item.client_facing || item.goal || ""),
+    citations: validateCitations(item.citations),
   };
 }
 
@@ -136,6 +155,7 @@ function validateIntervention(data: unknown, index: number): Intervention {
     description: String(item.description || ""),
     frequency: String(item.frequency || ""),
     client_facing: String(item.client_facing || ""),
+    citations: validateCitations(item.citations),
   };
 }
 
@@ -146,6 +166,7 @@ function validateHomework(data: unknown, index: number): Homework {
     task: String(item.task || ""),
     purpose: String(item.purpose || ""),
     due_date: item.due_date ? String(item.due_date) : undefined,
+    citations: validateCitations(item.citations),
   };
 }
 
@@ -155,6 +176,7 @@ function validateStrength(data: unknown, index: number): Strength {
     id: String(item.id || `str-${index + 1}`),
     strength: String(item.strength || ""),
     how_to_leverage: String(item.how_to_leverage || ""),
+    citations: validateCitations(item.citations),
   };
 }
 
