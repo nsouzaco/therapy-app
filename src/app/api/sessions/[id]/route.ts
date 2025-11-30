@@ -36,6 +36,8 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    console.log("[GET /api/sessions] Fetching session:", id);
+    
     const supabase = await createClient();
 
     // Get current user
@@ -45,8 +47,11 @@ export async function GET(
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
+      console.log("[GET /api/sessions] Auth error:", userError?.message || "No user");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    
+    console.log("[GET /api/sessions] User authenticated:", user.id);
 
     // Get the session with client info
     const { data: session, error: sessionError } = await supabase
@@ -76,8 +81,11 @@ export async function GET(
       .single();
 
     if (sessionError || !session) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      console.log("[GET /api/sessions] Session query error:", sessionError?.message || "No session found", "for id:", id);
+      return NextResponse.json({ error: "Session not found", details: sessionError?.message }, { status: 404 });
     }
+    
+    console.log("[GET /api/sessions] Session found:", session.id);
 
     // Verify access - either therapist owns the client or user is the client
     const { data: therapistProfile } = await supabase
@@ -95,8 +103,16 @@ export async function GET(
     
     const isTherapist = therapistProfile?.id === clientProfile?.therapist_id;
     const isClient = clientProfile?.users?.id === user.id;
+    
+    console.log("[GET /api/sessions] Access check:", {
+      therapistProfileId: therapistProfile?.id,
+      clientTherapistId: clientProfile?.therapist_id,
+      isTherapist,
+      isClient,
+    });
 
     if (!isTherapist && !isClient) {
+      console.log("[GET /api/sessions] Access denied for user:", user.id);
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
