@@ -183,8 +183,9 @@ export async function POST(
     }
 
     // Extract therapist style (wait for completion on Vercel)
+    // Pass therapistId to include RAG preferences in style learning
     try {
-      const result = await extractTherapistStyle(transcript_text);
+      const result = await extractTherapistStyle(transcript_text, therapistProfile.id);
       if (result.success) {
         // Store the extraction
         await supabase

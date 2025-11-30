@@ -112,7 +112,8 @@ export async function POST() {
     for (const session of toProcess) {
       try {
         console.log("Extracting style from session:", session.id);
-        const result = await extractTherapistStyle(session.transcript_text);
+        // Pass therapistId to include RAG preferences in style learning
+        const result = await extractTherapistStyle(session.transcript_text, therapistProfile.id);
         console.log("Extraction result:", result.success ? "success" : result.error);
         
         if (result.success) {

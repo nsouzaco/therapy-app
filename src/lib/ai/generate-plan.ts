@@ -3,11 +3,13 @@ import { callOpenAI } from "./openai-client";
 import { SYSTEM_PROMPT, buildUserPrompt, buildStyleContext, TherapistStyleProfile } from "./prompts";
 import { parsePlanResponse } from "./parse-response";
 import { scanForRisks, mergeRiskFactors } from "./risk-detection";
+import { buildRAGContext } from "@/lib/rag/retrieval";
 
 export interface GeneratePlanOptions {
   transcript: string;
   existingPlan?: PlanContent;
   therapistStyle?: TherapistStyleProfile | null;
+  therapistId?: string; // For RAG knowledge base retrieval
 }
 
 export interface GeneratePlanResult {
@@ -22,7 +24,7 @@ export interface GeneratePlanResult {
 export async function generatePlan(
   options: GeneratePlanOptions
 ): Promise<GeneratePlanResult> {
-  const { transcript, existingPlan, therapistStyle } = options;
+  const { transcript, existingPlan, therapistStyle, therapistId } = options;
 
   if (!transcript || transcript.trim().length === 0) {
     return { success: false, error: "Transcript is empty" };
@@ -34,7 +36,21 @@ export async function generatePlan(
 
     // Build system prompt with therapist style context
     const styleContext = buildStyleContext(therapistStyle || null);
-    const systemPrompt = SYSTEM_PROMPT + styleContext;
+    
+    // Retrieve relevant context from therapist's knowledge base (RAG)
+    let ragContext = "";
+    if (therapistId) {
+      try {
+        ragContext = await buildRAGContext(therapistId, transcript, {
+          forPlanGeneration: true,
+        });
+      } catch (ragError) {
+        // RAG is optional - log error but continue
+        console.error("RAG retrieval error:", ragError);
+      }
+    }
+    
+    const systemPrompt = SYSTEM_PROMPT + styleContext + (ragContext ? `\n\n${ragContext}` : "");
 
     // Call OpenAI to generate the plan
     const response = await callOpenAI(async (client) => {

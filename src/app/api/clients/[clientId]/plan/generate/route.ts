@@ -98,11 +98,12 @@ export async function POST(
       }
     }
 
-    // Generate plan using AI (with therapist style if available)
+    // Generate plan using AI (with therapist style and RAG knowledge base)
     const result = await generatePlan({
       transcript: session.transcript_text,
       existingPlan: existingContent,
       therapistStyle: styleProfile || null,
+      therapistId: therapistProfile.id, // For RAG knowledge base retrieval
     });
 
     if (!result.success || !result.content) {

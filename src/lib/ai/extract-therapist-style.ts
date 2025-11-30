@@ -1,4 +1,5 @@
 import { getOpenAIClient } from "./openai-client";
+import { buildRAGContext } from "@/lib/rag/retrieval";
 
 export interface TherapistStyleExtraction {
   modalities: {
@@ -90,9 +91,12 @@ Be specific and evidence-based - cite actual phrases or patterns you observed.`;
 
 /**
  * Extract therapist clinical style from a session transcript
+ * @param transcript - The session transcript to analyze
+ * @param therapistId - Optional therapist ID for RAG preference retrieval
  */
 export async function extractTherapistStyle(
-  transcript: string
+  transcript: string,
+  therapistId?: string
 ): Promise<{ success: true; extraction: TherapistStyleExtraction } | { success: false; error: string }> {
   try {
     const openai = getOpenAIClient();
@@ -114,10 +118,26 @@ export async function extractTherapistStyle(
       };
     }
 
+    // Retrieve therapist's stated preferences from knowledge base (RAG)
+    let preferenceContext = "";
+    if (therapistId) {
+      try {
+        preferenceContext = await buildRAGContext(therapistId, transcript, {
+          forPlanGeneration: false,
+          forStyleLearning: true,
+        });
+      } catch (ragError) {
+        // RAG is optional - log error but continue
+        console.error("RAG retrieval error in style extraction:", ragError);
+      }
+    }
+
+    const systemPrompt = STYLE_EXTRACTION_PROMPT + (preferenceContext ? `\n\n${preferenceContext}` : "");
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: STYLE_EXTRACTION_PROMPT },
+        { role: "system", content: systemPrompt },
         {
           role: "user",
           content: `Analyze this therapist's clinical style from the following transcript:\n\n${textToAnalyze}`,
