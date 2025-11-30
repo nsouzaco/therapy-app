@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Homework } from "@/lib/types/plan";
 import { EditableField } from "./editable-field";
+import { CitationBadge } from "./citation-badge";
 
 interface HomeworkSectionProps {
   homework: Homework[];
@@ -81,12 +82,15 @@ export function HomeworkSection({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-3 mb-2">
-                    <EditableField
-                      value={item.task}
-                      onSave={(value) => onUpdateHomework(item.id, "task", value)}
-                      disabled={!isEditable}
-                      className="font-medium text-sage-900"
-                    />
+                    <div className="flex items-start gap-2 flex-1">
+                      <EditableField
+                        value={item.task}
+                        onSave={(value) => onUpdateHomework(item.id, "task", value)}
+                        disabled={!isEditable}
+                        className="font-medium text-sage-900"
+                      />
+                      <CitationBadge citations={item.citations} className="flex-shrink-0 mt-0.5" />
+                    </div>
                     {item.due_date && (
                       <span className="text-xs font-medium px-2 py-1 bg-amber-100 text-amber-700 rounded whitespace-nowrap">
                         Due: {formatDate(item.due_date)}

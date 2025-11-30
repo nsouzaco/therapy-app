@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Strength } from "@/lib/types/plan";
 import { EditableField } from "./editable-field";
+import { CitationBadge } from "./citation-badge";
 
 interface StrengthsSectionProps {
   strengths: Strength[];
@@ -67,12 +68,15 @@ export function StrengthsSection({
                   </svg>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <EditableField
-                    value={strength.strength}
-                    onSave={(value) => onUpdateStrength(strength.id, "strength", value)}
-                    disabled={!isEditable}
-                    className="font-medium text-emerald-900 mb-2"
-                  />
+                  <div className="flex items-start gap-2">
+                    <EditableField
+                      value={strength.strength}
+                      onSave={(value) => onUpdateStrength(strength.id, "strength", value)}
+                      disabled={!isEditable}
+                      className="font-medium text-emerald-900 mb-2"
+                    />
+                    <CitationBadge citations={strength.citations} className="flex-shrink-0 mt-0.5" />
+                  </div>
                   <div className="text-sm text-emerald-700">
                     <span className="text-emerald-600 font-medium">How to leverage: </span>
                     <EditableField

@@ -71,6 +71,7 @@ IMPORTANT GUIDELINES:
 5. NEVER include risk factors in client-facing content.
 6. Use evidence-based interventions appropriate to the presenting concerns.
 7. Identify client strengths that can be leveraged in treatment.
+8. EXPLAINABILITY: For each element you generate, include "citations" - direct quotes from the transcript that support your analysis. This helps therapists understand why you made each suggestion.
 
 Your output must be valid JSON matching the specified schema exactly.`;
 
@@ -95,11 +96,13 @@ Generate a treatment plan with the following structure:
 {
   "presenting_concerns": {
     "clinical": "Clinical description of presenting concerns",
-    "client_facing": "Warm, accessible summary for the client"
+    "client_facing": "Warm, accessible summary for the client",
+    "citations": [{"excerpt": "Direct quote from transcript", "context": "Why this is relevant"}]
   },
   "clinical_impressions": {
     "clinical": "Clinical observations and impressions",
-    "client_facing": "Supportive summary of what we're working on together"
+    "client_facing": "Supportive summary of what we're working on together",
+    "citations": [{"excerpt": "Direct quote from transcript", "context": "Why this is relevant"}]
   },
   "goals": [
     {
@@ -107,7 +110,8 @@ Generate a treatment plan with the following structure:
       "type": "short_term" or "long_term",
       "goal": "Specific, measurable goal",
       "target_date": "Optional target date (ISO format)",
-      "client_facing": "Goal explained in accessible language"
+      "client_facing": "Goal explained in accessible language",
+      "citations": [{"excerpt": "Direct quote from transcript", "context": "Why this goal was identified"}]
     }
   ],
   "interventions": [
@@ -116,7 +120,8 @@ Generate a treatment plan with the following structure:
       "name": "Intervention name",
       "description": "Clinical description of the intervention",
       "frequency": "How often (e.g., 'Weekly sessions', 'Daily practice')",
-      "client_facing": "What this means for you in plain language"
+      "client_facing": "What this means for you in plain language",
+      "citations": [{"excerpt": "Direct quote from transcript", "context": "Why this intervention is appropriate"}]
     }
   ],
   "homework": [
@@ -124,14 +129,16 @@ Generate a treatment plan with the following structure:
       "id": "hw-1",
       "task": "Specific task or exercise",
       "purpose": "Why this helps",
-      "due_date": "Optional due date (ISO format)"
+      "due_date": "Optional due date (ISO format)",
+      "citations": [{"excerpt": "Direct quote from transcript", "context": "Why this homework is relevant"}]
     }
   ],
   "strengths": [
     {
       "id": "str-1",
       "strength": "Identified strength",
-      "how_to_leverage": "How we can use this in treatment"
+      "how_to_leverage": "How we can use this in treatment",
+      "citations": [{"excerpt": "Direct quote showing this strength", "context": "How client demonstrated this"}]
     }
   ],
   "risk_factors": {
@@ -152,8 +159,22 @@ IMPORTANT:
 - Include at least 2 interventions
 - Include at least 1-2 homework assignments
 - Always assess risk factors, even if level is "low"
-- Make client_facing content warm, encouraging, and jargon-free`;
+- Make client_facing content warm, encouraging, and jargon-free
+- ALWAYS include citations with direct quotes from the transcript for each element (except risk_factors)`;
 }
+
+// Citation schema for explainability
+const CITATION_SCHEMA = {
+  type: "array",
+  items: {
+    type: "object",
+    properties: {
+      excerpt: { type: "string" },
+      context: { type: "string" }
+    },
+    required: ["excerpt"]
+  }
+};
 
 export const PLAN_JSON_SCHEMA = {
   type: "object",
@@ -162,7 +183,8 @@ export const PLAN_JSON_SCHEMA = {
       type: "object",
       properties: {
         clinical: { type: "string" },
-        client_facing: { type: "string" }
+        client_facing: { type: "string" },
+        citations: CITATION_SCHEMA
       },
       required: ["clinical", "client_facing"]
     },
@@ -170,7 +192,8 @@ export const PLAN_JSON_SCHEMA = {
       type: "object",
       properties: {
         clinical: { type: "string" },
-        client_facing: { type: "string" }
+        client_facing: { type: "string" },
+        citations: CITATION_SCHEMA
       },
       required: ["clinical", "client_facing"]
     },
@@ -183,7 +206,8 @@ export const PLAN_JSON_SCHEMA = {
           type: { type: "string", enum: ["short_term", "long_term"] },
           goal: { type: "string" },
           target_date: { type: "string" },
-          client_facing: { type: "string" }
+          client_facing: { type: "string" },
+          citations: CITATION_SCHEMA
         },
         required: ["id", "type", "goal", "client_facing"]
       }
@@ -197,7 +221,8 @@ export const PLAN_JSON_SCHEMA = {
           name: { type: "string" },
           description: { type: "string" },
           frequency: { type: "string" },
-          client_facing: { type: "string" }
+          client_facing: { type: "string" },
+          citations: CITATION_SCHEMA
         },
         required: ["id", "name", "description", "frequency", "client_facing"]
       }
@@ -210,7 +235,8 @@ export const PLAN_JSON_SCHEMA = {
           id: { type: "string" },
           task: { type: "string" },
           purpose: { type: "string" },
-          due_date: { type: "string" }
+          due_date: { type: "string" },
+          citations: CITATION_SCHEMA
         },
         required: ["id", "task", "purpose"]
       }
@@ -222,7 +248,8 @@ export const PLAN_JSON_SCHEMA = {
         properties: {
           id: { type: "string" },
           strength: { type: "string" },
-          how_to_leverage: { type: "string" }
+          how_to_leverage: { type: "string" },
+          citations: CITATION_SCHEMA
         },
         required: ["id", "strength", "how_to_leverage"]
       }

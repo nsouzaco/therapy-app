@@ -345,6 +345,7 @@ export default function PlanPage() {
             title="Presenting Concerns"
             clinicalContent={content.presenting_concerns.clinical}
             clientContent={content.presenting_concerns.client_facing}
+            citations={content.presenting_concerns.citations}
             onSaveClinical={async (value) => {
               await updatePlanContent({
                 presenting_concerns: {
@@ -368,6 +369,7 @@ export default function PlanPage() {
             title="Clinical Impressions"
             clinicalContent={content.clinical_impressions.clinical}
             clientContent={content.clinical_impressions.client_facing}
+            citations={content.clinical_impressions.citations}
             onSaveClinical={async (value) => {
               await updatePlanContent({
                 clinical_impressions: {

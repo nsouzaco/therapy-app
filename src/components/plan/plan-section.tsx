@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import { EditableField } from "./editable-field";
+import { CitationBadge } from "./citation-badge";
+import type { Citation } from "@/lib/types/plan";
 
 interface PlanSectionProps {
   title: string;
   clinicalContent: string;
   clientContent: string;
+  citations?: Citation[];
   onSaveClinical: (value: string) => Promise<void>;
   onSaveClient: (value: string) => Promise<void>;
   isEditable?: boolean;
@@ -17,6 +20,7 @@ export function PlanSection({
   title,
   clinicalContent,
   clientContent,
+  citations,
   onSaveClinical,
   onSaveClient,
   isEditable = true,
@@ -30,7 +34,12 @@ export function PlanSection({
         onClick={() => setIsExpanded(!isExpanded)}
         className="w-full px-4 py-3 bg-sage-50 flex items-center justify-between hover:bg-sage-100 transition-colors"
       >
-        <h3 className="font-semibold text-sage-900">{title}</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-sage-900">{title}</h3>
+          {citations && citations.length > 0 && (
+            <CitationBadge citations={citations} />
+          )}
+        </div>
         <svg
           className={`w-5 h-5 text-sage-500 transition-transform ${
             isExpanded ? "rotate-180" : ""

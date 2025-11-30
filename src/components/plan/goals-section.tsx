@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Goal } from "@/lib/types/plan";
 import { EditableField } from "./editable-field";
+import { CitationBadge } from "./citation-badge";
 
 interface GoalsSectionProps {
   goals: Goal[];
@@ -32,12 +33,15 @@ export function GoalsSection({ goals, onUpdateGoal, isEditable = true }: GoalsSe
   const GoalCard = ({ goal }: { goal: Goal }) => (
     <div className="bg-white p-4 rounded-lg border border-sage-200 space-y-3">
       <div className="flex items-start justify-between gap-3">
-        <EditableField
-          value={goal.goal}
-          onSave={(value) => onUpdateGoal(goal.id, "goal", value)}
-          disabled={!isEditable}
-          className="flex-1"
-        />
+        <div className="flex items-start gap-2 flex-1">
+          <EditableField
+            value={goal.goal}
+            onSave={(value) => onUpdateGoal(goal.id, "goal", value)}
+            disabled={!isEditable}
+            className="flex-1"
+          />
+          <CitationBadge citations={goal.citations} className="flex-shrink-0 mt-0.5" />
+        </div>
         {goal.target_date && (
           <span className="text-xs font-medium px-2 py-1 bg-sage-100 text-sage-600 rounded whitespace-nowrap">
             Target: {formatDate(goal.target_date)}

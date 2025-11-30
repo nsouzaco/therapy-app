@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Intervention } from "@/lib/types/plan";
 import { EditableField } from "./editable-field";
+import { CitationBadge } from "./citation-badge";
 
 interface InterventionsSectionProps {
   interventions: Intervention[];
@@ -55,14 +56,17 @@ export function InterventionsSection({
               className="bg-white p-4 rounded-lg border border-sage-200"
             >
               <div className="flex items-start justify-between gap-3 mb-3">
-                <EditableField
-                  value={intervention.name}
-                  onSave={(value) =>
-                    onUpdateIntervention(intervention.id, "name", value)
-                  }
-                  disabled={!isEditable}
-                  className="font-medium text-sage-900"
-                />
+                <div className="flex items-start gap-2 flex-1">
+                  <EditableField
+                    value={intervention.name}
+                    onSave={(value) =>
+                      onUpdateIntervention(intervention.id, "name", value)
+                    }
+                    disabled={!isEditable}
+                    className="font-medium text-sage-900"
+                  />
+                  <CitationBadge citations={intervention.citations} className="flex-shrink-0 mt-0.5" />
+                </div>
                 <span className="text-xs font-medium px-2 py-1 bg-primary-100 text-primary-700 rounded whitespace-nowrap">
                   {intervention.frequency}
                 </span>

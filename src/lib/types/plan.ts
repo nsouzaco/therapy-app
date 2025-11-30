@@ -1,13 +1,21 @@
 // Treatment Plan Types - Matching PRD Schema
 
+// Citation for explainability - links plan elements to transcript sources
+export interface Citation {
+  excerpt: string;  // The relevant transcript excerpt
+  context?: string; // Brief explanation of why this is relevant
+}
+
 export interface PresentingConcerns {
   clinical: string;
   client_facing: string;
+  citations?: Citation[];
 }
 
 export interface ClinicalImpressions {
   clinical: string;
   client_facing: string;
+  citations?: Citation[];
 }
 
 export interface Goal {
@@ -16,6 +24,7 @@ export interface Goal {
   goal: string;
   target_date?: string;
   client_facing: string;
+  citations?: Citation[];
 }
 
 export interface Intervention {
@@ -24,6 +33,7 @@ export interface Intervention {
   description: string;
   frequency: string;
   client_facing: string;
+  citations?: Citation[];
 }
 
 export interface Homework {
@@ -31,12 +41,14 @@ export interface Homework {
   task: string;
   purpose: string;
   due_date?: string;
+  citations?: Citation[];
 }
 
 export interface Strength {
   id: string;
   strength: string;
   how_to_leverage: string;
+  citations?: Citation[];
 }
 
 export type RiskLevel = "low" | "moderate" | "high";
