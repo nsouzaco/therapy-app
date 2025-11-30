@@ -139,6 +139,70 @@ export async function GET(
   }
 }
 
+// PATCH /api/sessions/[id] - Update session summaries
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const supabase = await createClient();
+
+    // Get current user
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Verify therapist has access to this session
+    const hasAccess = await verifyTherapistAccess(supabase, user.id, id);
+    if (!hasAccess) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const { summary_therapist, summary_client, progress_notes, key_themes } = body;
+
+    // Build update object with only provided fields
+    const updates: Record<string, unknown> = {};
+    if (summary_therapist !== undefined) updates.summary_therapist = summary_therapist;
+    if (summary_client !== undefined) updates.summary_client = summary_client;
+    if (progress_notes !== undefined) updates.progress_notes = progress_notes;
+    if (key_themes !== undefined) updates.key_themes = key_themes;
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: "No fields to update" }, { status: 400 });
+    }
+
+    const { data: session, error: updateError } = await supabase
+      .from("sessions")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error("Error updating session:", updateError);
+      return NextResponse.json(
+        { error: "Failed to update session" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ session });
+  } catch (error) {
+    console.error("Error in PATCH /api/sessions/[id]:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
 // DELETE /api/sessions/[id] - Delete a session
 export async function DELETE(
   request: Request,

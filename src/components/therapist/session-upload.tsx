@@ -114,14 +114,25 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
           setProcessingPhase("loading-ffmpeg");
           setProcessingProgress(null);
 
-          audioFile = await extractAudioFromVideo(file, (progress: ExtractAudioProgress) => {
-            if (progress.phase === "loading") {
-              setProcessingPhase("loading-ffmpeg");
-            } else if (progress.phase === "extracting") {
-              setProcessingPhase("extracting-audio");
-              setProcessingProgress(progress.progress ?? null);
+          try {
+            audioFile = await extractAudioFromVideo(file, (progress: ExtractAudioProgress) => {
+              if (progress.phase === "loading") {
+                setProcessingPhase("loading-ffmpeg");
+              } else if (progress.phase === "extracting") {
+                setProcessingPhase("extracting-audio");
+                setProcessingProgress(progress.progress ?? null);
+              }
+            });
+          } catch (ffmpegErr) {
+            // FFmpeg failed - provide helpful error message
+            const errMessage = ffmpegErr instanceof Error ? ffmpegErr.message : "";
+            if (errMessage.includes("FFMPEG_UNAVAILABLE") || errMessage.includes("FFMPEG_TIMEOUT")) {
+              throw new Error(
+                "Video processing is not available in this browser. Please upload an audio file (MP3, M4A, WAV) instead, or extract the audio using a tool like VLC or an online converter."
+              );
             }
-          });
+            throw ffmpegErr;
+          }
 
           // Step 2: Upload video to storage for playback
           setProcessingPhase("uploading-video");

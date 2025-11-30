@@ -38,6 +38,11 @@ export default function SessionDetailPage() {
   const [activeTab, setActiveTab] = useState<"summary" | "transcript">("summary");
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  
+  // Editing states
+  const [editingField, setEditingField] = useState<"summary_therapist" | "summary_client" | "progress_notes" | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -57,6 +62,43 @@ export default function SessionDetailPage() {
     } finally {
       setIsDeleting(false);
       setShowDeleteConfirm(false);
+    }
+  };
+
+  const startEditing = (field: "summary_therapist" | "summary_client" | "progress_notes") => {
+    if (!session) return;
+    setEditingField(field);
+    setEditValue(session[field] || "");
+  };
+
+  const cancelEditing = () => {
+    setEditingField(null);
+    setEditValue("");
+  };
+
+  const saveEdit = async () => {
+    if (!editingField || !session) return;
+    
+    setIsSaving(true);
+    try {
+      const response = await fetch(`/api/sessions/${sessionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [editingField]: editValue }),
+      });
+      
+      if (response.ok) {
+        setSession({ ...session, [editingField]: editValue });
+        setEditingField(null);
+        setEditValue("");
+      } else {
+        const data = await response.json();
+        setError(data.error || "Failed to save changes");
+      }
+    } catch {
+      setError("Failed to save changes");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -296,46 +338,145 @@ export default function SessionDetailPage() {
           {/* Therapist Summary */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-xs font-medium px-2 py-0.5 bg-sage-100 text-sage-600 rounded">
-                  Clinical
-                </span>
-                Session Summary
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium px-2 py-0.5 bg-sage-100 text-sage-600 rounded">
+                    Clinical
+                  </span>
+                  Session Summary
+                </div>
+                {editingField !== "summary_therapist" && (
+                  <button
+                    onClick={() => startEditing("summary_therapist")}
+                    className="text-sage-400 hover:text-sage-600 p-1"
+                    title="Edit"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </button>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="prose prose-sage prose-sm max-w-none">
-                <p className="text-sage-700 whitespace-pre-wrap">
-                  {session.summary_therapist || "Summary not yet generated."}
-                </p>
-              </div>
-              {session.progress_notes && (
-                <div className="mt-4 pt-4 border-t border-sage-200">
-                  <h4 className="text-sm font-medium text-sage-600 mb-2">
-                    Progress Notes
-                  </h4>
-                  <p className="text-sm text-sage-700">{session.progress_notes}</p>
+              {editingField === "summary_therapist" ? (
+                <div className="space-y-3">
+                  <textarea
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    className="w-full p-3 border border-sage-300 rounded-lg text-sm min-h-[150px] focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="Enter clinical summary..."
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" size="sm" onClick={cancelEditing} disabled={isSaving}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={saveEdit} isLoading={isSaving}>
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="prose prose-sage prose-sm max-w-none">
+                  <p className="text-sage-700 whitespace-pre-wrap">
+                    {session.summary_therapist || "Summary not yet generated."}
+                  </p>
                 </div>
               )}
+              
+              {/* Progress Notes */}
+              <div className="mt-4 pt-4 border-t border-sage-200">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-medium text-sage-600">Progress Notes</h4>
+                  {editingField !== "progress_notes" && (
+                    <button
+                      onClick={() => startEditing("progress_notes")}
+                      className="text-sage-400 hover:text-sage-600 p-1"
+                      title="Edit"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+                {editingField === "progress_notes" ? (
+                  <div className="space-y-3">
+                    <textarea
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      className="w-full p-3 border border-sage-300 rounded-lg text-sm min-h-[100px] focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      placeholder="Enter progress notes..."
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="outline" size="sm" onClick={cancelEditing} disabled={isSaving}>
+                        Cancel
+                      </Button>
+                      <Button size="sm" onClick={saveEdit} isLoading={isSaving}>
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-sage-700">
+                    {session.progress_notes || "No progress notes yet."}
+                  </p>
+                )}
+              </div>
             </CardContent>
           </Card>
 
-          {/* Client Summary */}
+          {/* Client Summary - What We Worked On */}
           <Card className="bg-primary-50/30 border-primary-100">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-xs font-medium px-2 py-0.5 bg-primary-100 text-primary-700 rounded">
-                  Client-Facing
-                </span>
-                What We Worked On
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium px-2 py-0.5 bg-primary-100 text-primary-700 rounded">
+                    Client-Facing
+                  </span>
+                  What We Worked On
+                </div>
+                {editingField !== "summary_client" && (
+                  <button
+                    onClick={() => startEditing("summary_client")}
+                    className="text-primary-400 hover:text-primary-600 p-1"
+                    title="Edit"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </button>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="prose prose-sage prose-sm max-w-none">
-                <p className="text-sage-700 whitespace-pre-wrap">
-                  {session.summary_client || "Summary not yet generated."}
-                </p>
-              </div>
+              {editingField === "summary_client" ? (
+                <div className="space-y-3">
+                  <textarea
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    className="w-full p-3 border border-primary-200 rounded-lg text-sm min-h-[150px] focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                    placeholder="Enter client-facing summary..."
+                  />
+                  <p className="text-xs text-primary-600">
+                    This is what your client will see. Keep it warm, encouraging, and in plain language.
+                  </p>
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" size="sm" onClick={cancelEditing} disabled={isSaving}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={saveEdit} isLoading={isSaving}>
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="prose prose-sage prose-sm max-w-none">
+                  <p className="text-sage-700 whitespace-pre-wrap">
+                    {session.summary_client || "Summary not yet generated."}
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

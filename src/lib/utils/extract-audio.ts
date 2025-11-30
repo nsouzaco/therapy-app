@@ -4,19 +4,42 @@ import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 
 let ffmpeg: FFmpeg | null = null;
+let ffmpegLoadFailed = false;
 
 async function getFFmpeg(): Promise<FFmpeg> {
-  if (ffmpeg) return ffmpeg;
+  if (ffmpegLoadFailed) {
+    throw new Error("FFMPEG_UNAVAILABLE");
+  }
+  
+  if (ffmpeg && ffmpeg.loaded) return ffmpeg;
 
   ffmpeg = new FFmpeg();
 
-  // Load ffmpeg with CDN URLs for the core files
-  const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
+  // Load ffmpeg with CDN URLs for the core files (UMD version for better compatibility)
+  const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
 
-  await ffmpeg.load({
-    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-  });
+  try {
+    // Add timeout for loading
+    const loadPromise = ffmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+      workerURL: await toBlobURL(
+        `https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/814.ffmpeg.js`,
+        "text/javascript"
+      ),
+    });
+    
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error("FFMPEG_TIMEOUT")), 60000)
+    );
+    
+    await Promise.race([loadPromise, timeoutPromise]);
+  } catch (err) {
+    console.error("FFmpeg load error:", err);
+    ffmpegLoadFailed = true;
+    ffmpeg = null;
+    throw new Error("FFMPEG_UNAVAILABLE");
+  }
 
   return ffmpeg;
 }
