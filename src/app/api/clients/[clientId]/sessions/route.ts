@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 import { generateSessionSummary } from "@/lib/ai/generate-summary";
 import { extractTherapistStyle, mergeStyleExtractions, TherapistStyleExtraction } from "@/lib/ai/extract-therapist-style";
 
+// Increase timeout for session creation (includes summary + style extraction)
+export const maxDuration = 60;
+
 // GET /api/clients/[clientId]/sessions - List sessions for a client
 export async function GET(
   request: Request,
@@ -160,64 +163,68 @@ export async function POST(
       );
     }
 
-    // Generate session summaries asynchronously (don't block response)
-    generateSessionSummary(transcript_text)
-      .then(async (summary) => {
-        if (summary) {
-          await supabase
-            .from("sessions")
-            .update({
-              summary_therapist: summary.therapist_summary,
-              summary_client: summary.client_summary,
-              key_themes: summary.key_themes,
-              progress_notes: summary.progress_notes,
-            })
-            .eq("id", session.id);
-        }
-      })
-      .catch((err) => console.error("Summary generation failed:", err));
+    // Generate session summaries (wait for completion on Vercel)
+    try {
+      const summary = await generateSessionSummary(transcript_text);
+      if (summary) {
+        await supabase
+          .from("sessions")
+          .update({
+            summary_therapist: summary.therapist_summary,
+            summary_client: summary.client_summary,
+            key_themes: summary.key_themes,
+            progress_notes: summary.progress_notes,
+          })
+          .eq("id", session.id);
+      }
+    } catch (err) {
+      console.error("Summary generation failed:", err);
+      // Non-fatal: session is still created, summary can be regenerated
+    }
 
-    // Extract therapist style asynchronously (don't block response)
-    extractTherapistStyle(transcript_text)
-      .then(async (result) => {
-        if (result.success) {
-          // Store the extraction
+    // Extract therapist style (wait for completion on Vercel)
+    try {
+      const result = await extractTherapistStyle(transcript_text);
+      if (result.success) {
+        // Store the extraction
+        await supabase
+          .from("session_style_extractions")
+          .upsert({
+            session_id: session.id,
+            therapist_id: therapistProfile.id,
+            extraction: result.extraction,
+            detected_modalities: result.extraction.modalities.primary
+              ? [result.extraction.modalities.primary, ...result.extraction.modalities.secondary]
+              : result.extraction.modalities.secondary,
+            detected_interventions: result.extraction.interventions,
+            detected_tone: result.extraction.communication.tone,
+          }, { onConflict: "session_id" });
+
+        // Re-aggregate the therapist's style profile
+        const { data: allExtractions } = await supabase
+          .from("session_style_extractions")
+          .select("extraction")
+          .eq("therapist_id", therapistProfile.id);
+
+        if (allExtractions && allExtractions.length > 0) {
+          const mergedProfile = await mergeStyleExtractions(
+            allExtractions.map((e) => e.extraction as TherapistStyleExtraction)
+          );
+
           await supabase
-            .from("session_style_extractions")
+            .from("therapist_style_profiles")
             .upsert({
-              session_id: session.id,
               therapist_id: therapistProfile.id,
-              extraction: result.extraction,
-              detected_modalities: result.extraction.modalities.primary
-                ? [result.extraction.modalities.primary, ...result.extraction.modalities.secondary]
-                : result.extraction.modalities.secondary,
-              detected_interventions: result.extraction.interventions,
-              detected_tone: result.extraction.communication.tone,
-            }, { onConflict: "session_id" });
-
-          // Re-aggregate the therapist's style profile
-          const { data: allExtractions } = await supabase
-            .from("session_style_extractions")
-            .select("extraction")
-            .eq("therapist_id", therapistProfile.id);
-
-          if (allExtractions && allExtractions.length > 0) {
-            const mergedProfile = await mergeStyleExtractions(
-              allExtractions.map((e) => e.extraction as TherapistStyleExtraction)
-            );
-
-            await supabase
-              .from("therapist_style_profiles")
-              .upsert({
-                therapist_id: therapistProfile.id,
-                ...mergedProfile,
-                sessions_analyzed: allExtractions.length,
-                last_extraction_at: new Date().toISOString(),
-              }, { onConflict: "therapist_id" });
-          }
+              ...mergedProfile,
+              sessions_analyzed: allExtractions.length,
+              last_extraction_at: new Date().toISOString(),
+            }, { onConflict: "therapist_id" });
         }
-      })
-      .catch((err) => console.error("Style extraction failed:", err));
+      }
+    } catch (err) {
+      console.error("Style extraction failed:", err);
+      // Non-fatal: session is still created
+    }
 
     return NextResponse.json({
       message: "Session created successfully",
