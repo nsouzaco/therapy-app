@@ -89,7 +89,7 @@ export async function extractAudioFromVideo(
   onProgress?.({ phase: "done" });
 
   // Create a File object from the output
-  const audioBlob = new Blob([data], { type: "audio/mpeg" });
+  const audioBlob = new Blob([data as BlobPart], { type: "audio/mpeg" });
   const audioFile = new File(
     [audioBlob],
     videoFile.name.replace(/\.[^.]+$/, ".mp3"),
