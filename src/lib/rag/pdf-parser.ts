@@ -2,8 +2,8 @@
  * PDF and document text extraction utilities
  */
 
-// Import will be resolved at build time - pdf-parse is a Node.js library
-import pdf from "pdf-parse";
+// pdf-parse is a CommonJS module
+import * as pdfParse from "pdf-parse";
 
 export interface ParsedDocument {
   text: string;
@@ -21,6 +21,8 @@ export interface ParsedDocument {
  */
 export async function parsePDF(buffer: Buffer): Promise<ParsedDocument> {
   try {
+    // Handle both ESM and CommonJS module formats
+    const pdf = typeof pdfParse === "function" ? pdfParse : (pdfParse as { default: typeof pdfParse }).default;
     const data = await pdf(buffer);
     
     return {
