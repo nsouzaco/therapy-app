@@ -10,8 +10,20 @@ interface CitationBadgeProps {
 
 export function CitationBadge({ citations, className = "" }: CitationBadgeProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
   const popoverRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // Update position when opening
+  useEffect(() => {
+    if (isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setPosition({
+        top: Math.min(rect.bottom + 8, window.innerHeight - 340),
+        left: Math.max(8, Math.min(rect.left - 150, window.innerWidth - 400)),
+      });
+    }
+  }, [isOpen]);
 
   // Close on click outside
   useEffect(() => {
@@ -53,15 +65,16 @@ export function CitationBadge({ citations, className = "" }: CitationBadgeProps)
       {isOpen && (
         <div
           ref={popoverRef}
-          className="absolute z-50 mt-1 top-full left-0 w-80 max-h-64 overflow-y-auto bg-white rounded-lg shadow-lg border border-sage-200 p-3"
+          className="fixed z-[100] w-96 max-h-80 overflow-y-auto bg-white rounded-lg shadow-xl border border-sage-200 p-4"
+          style={{ top: position.top, left: position.left }}
         >
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-medium text-sage-900">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-semibold text-sage-900">
               Transcript Evidence
             </h4>
             <button
               onClick={() => setIsOpen(false)}
-              className="text-sage-400 hover:text-sage-600"
+              className="text-sage-400 hover:text-sage-600 p-1"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -71,11 +84,11 @@ export function CitationBadge({ citations, className = "" }: CitationBadgeProps)
           <div className="space-y-3">
             {citations.map((citation, index) => (
               <div key={index} className="text-sm">
-                <blockquote className="border-l-2 border-primary-300 pl-3 py-1 text-sage-700 italic bg-sage-50 rounded-r">
+                <blockquote className="border-l-2 border-primary-300 pl-3 py-2 text-sage-700 italic bg-sage-50 rounded-r">
                   &ldquo;{citation.excerpt}&rdquo;
                 </blockquote>
                 {citation.context && (
-                  <p className="mt-1 text-xs text-sage-500 pl-3">
+                  <p className="mt-1.5 text-xs text-sage-500 pl-3">
                     {citation.context}
                   </p>
                 )}
