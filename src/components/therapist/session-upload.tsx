@@ -18,6 +18,7 @@ interface SessionUploadProps {
 const MAX_CHARS = 50000;
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB for video files (we extract audio)
 const MAX_AUDIO_SIZE = 25 * 1024 * 1024; // 25MB for audio-only files
+const DIRECT_UPLOAD_LIMIT = 4 * 1024 * 1024; // 4MB - files larger than this need storage upload first
 
 type ProcessingPhase =
   | "idle"
@@ -161,13 +162,38 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
         setProcessingPhase("transcribing");
         setProcessingProgress(null);
 
-        const formData = new FormData();
-        formData.append("audio", audioFile);
+        let response: Response;
+        
+        // If audio file is large, upload to storage first to avoid Vercel payload limits
+        if (audioFile.size > DIRECT_UPLOAD_LIMIT) {
+          const audioPath = `${clientId}/audio-${Date.now()}.mp3`;
+          const { error: audioUploadError } = await supabase.storage
+            .from("session-media")
+            .upload(audioPath, audioFile, {
+              cacheControl: "3600",
+              upsert: false,
+            });
 
-        const response = await fetch("/api/transcribe", {
-          method: "POST",
-          body: formData,
-        });
+          if (audioUploadError) {
+            throw new Error(`Failed to upload audio: ${audioUploadError.message}`);
+          }
+
+          // Send storage path to transcribe API
+          response = await fetch("/api/transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ storagePath: audioPath }),
+          });
+        } else {
+          // Small file - send directly
+          const formData = new FormData();
+          formData.append("audio", audioFile);
+
+          response = await fetch("/api/transcribe", {
+            method: "POST",
+            body: formData,
+          });
+        }
 
         const contentType = response.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {

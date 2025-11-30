@@ -8,6 +8,9 @@ export const maxDuration = 60;
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB (OpenAI Whisper API limit)
 
 // POST /api/transcribe - Transcribe audio file using OpenAI Whisper
+// Accepts either:
+// - FormData with "audio" file (direct upload for small files)
+// - JSON with "storagePath" (for large files uploaded to Supabase Storage)
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -21,15 +24,50 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get form data with audio file
-    const formData = await request.formData();
-    const audioFile = formData.get("audio") as File | null;
+    let audioFile: File;
+    const contentType = request.headers.get("content-type") || "";
 
-    if (!audioFile) {
-      return NextResponse.json(
-        { error: "No audio file provided" },
-        { status: 400 }
-      );
+    if (contentType.includes("application/json")) {
+      // Handle storage path approach
+      const body = await request.json();
+      const { storagePath } = body;
+
+      if (!storagePath) {
+        return NextResponse.json(
+          { error: "No storage path provided" },
+          { status: 400 }
+        );
+      }
+
+      // Download file from Supabase Storage
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from("session-media")
+        .download(storagePath);
+
+      if (downloadError || !fileData) {
+        console.error("Storage download error:", downloadError);
+        return NextResponse.json(
+          { error: "Failed to download audio file from storage" },
+          { status: 500 }
+        );
+      }
+
+      // Convert Blob to File
+      const fileName = storagePath.split("/").pop() || "audio.mp3";
+      audioFile = new File([fileData], fileName, { type: "audio/mpeg" });
+    } else {
+      // Handle direct FormData upload
+      const formData = await request.formData();
+      const uploadedFile = formData.get("audio") as File | null;
+
+      if (!uploadedFile) {
+        return NextResponse.json(
+          { error: "No audio file provided" },
+          { status: 400 }
+        );
+      }
+
+      audioFile = uploadedFile;
     }
 
     // Validate file size
