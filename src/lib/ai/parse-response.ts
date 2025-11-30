@@ -48,16 +48,10 @@ function validatePlanContent(data: unknown): PlanContent {
   const plan = data as Record<string, unknown>;
   
   // Validate presenting_concerns
-  const presentingConcerns = validateDualContent(
-    plan.presenting_concerns,
-    "presenting_concerns"
-  );
+  const presentingConcerns = validateDualContent(plan.presenting_concerns);
   
   // Validate clinical_impressions
-  const clinicalImpressions = validateDualContent(
-    plan.clinical_impressions,
-    "clinical_impressions"
-  );
+  const clinicalImpressions = validateDualContent(plan.clinical_impressions);
   
   // Validate goals array
   const goals = validateArray<Goal>(plan.goals, "goals", validateGoal);
@@ -107,8 +101,7 @@ function validateCitations(data: unknown): Citation[] | undefined {
 }
 
 function validateDualContent(
-  data: unknown,
-  _fieldName: string
+  data: unknown
 ): { clinical: string; client_facing: string; citations?: Citation[] } {
   if (!data || typeof data !== "object") {
     return { clinical: "", client_facing: "" };

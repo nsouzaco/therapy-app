@@ -105,7 +105,12 @@ function findSentenceBreak(text: string, start: number, target: number): number 
   const searchText = text.slice(searchStart, target + 50);
   
   // Find sentence endings
-  const matches = [...searchText.matchAll(/[.!?]+\s+/g)];
+  const matches: RegExpExecArray[] = [];
+  const regex = /[.!?]+\s+/g;
+  let match;
+  while ((match = regex.exec(searchText)) !== null) {
+    matches.push(match);
+  }
   
   if (matches.length === 0) {
     return -1;
