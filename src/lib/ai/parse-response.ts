@@ -91,10 +91,20 @@ function validateCitations(data: unknown): Citation[] | undefined {
   const citations = data
     .map((c) => {
       const item = (c || {}) as Record<string, unknown>;
-      return {
+      const citation: Citation = {
         excerpt: String(item.excerpt || ""),
         context: item.context ? String(item.context) : undefined,
       };
+      // Handle source type
+      if (item.source === "knowledge_base") {
+        citation.source = "knowledge_base";
+        if (item.document_title) {
+          citation.document_title = String(item.document_title);
+        }
+      } else {
+        citation.source = "transcript";
+      }
+      return citation;
     })
     .filter((c) => c.excerpt.length > 0);
   return citations.length > 0 ? citations : undefined;

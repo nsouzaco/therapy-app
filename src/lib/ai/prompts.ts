@@ -71,7 +71,11 @@ IMPORTANT GUIDELINES:
 5. NEVER include risk factors in client-facing content.
 6. Use evidence-based interventions appropriate to the presenting concerns.
 7. Identify client strengths that can be leveraged in treatment.
-8. EXPLAINABILITY: For each element you generate, include "citations" - direct quotes from the transcript that support your analysis. This helps therapists understand why you made each suggestion.
+8. EXPLAINABILITY: For each element you generate, include "citations" that support your analysis:
+   - "source": "transcript" for quotes from the session transcript
+   - "source": "knowledge_base" for references to the therapist's uploaded documents/research
+   - Include "document_title" when citing knowledge base sources
+   This helps therapists understand the evidence behind each suggestion.
 
 Your output must be valid JSON matching the specified schema exactly.`;
 
@@ -97,12 +101,12 @@ Generate a treatment plan with the following structure:
   "presenting_concerns": {
     "clinical": "Clinical description of presenting concerns",
     "client_facing": "Warm, accessible summary for the client",
-    "citations": [{"excerpt": "Direct quote from transcript", "context": "Why this is relevant"}]
+    "citations": [{"excerpt": "Quote or reference", "context": "Why relevant", "source": "transcript" or "knowledge_base", "document_title": "For knowledge_base only"}]
   },
   "clinical_impressions": {
     "clinical": "Clinical observations and impressions",
     "client_facing": "Supportive summary of what we're working on together",
-    "citations": [{"excerpt": "Direct quote from transcript", "context": "Why this is relevant"}]
+    "citations": [{"excerpt": "Quote or reference", "context": "Why relevant", "source": "transcript" or "knowledge_base"}]
   },
   "goals": [
     {
@@ -111,7 +115,7 @@ Generate a treatment plan with the following structure:
       "goal": "Specific, measurable goal",
       "target_date": "Optional target date (ISO format)",
       "client_facing": "Goal explained in accessible language",
-      "citations": [{"excerpt": "Direct quote from transcript", "context": "Why this goal was identified"}]
+      "citations": [{"excerpt": "Quote", "context": "Why identified", "source": "transcript" or "knowledge_base"}]
     }
   ],
   "interventions": [
@@ -121,7 +125,7 @@ Generate a treatment plan with the following structure:
       "description": "Clinical description of the intervention",
       "frequency": "How often (e.g., 'Weekly sessions', 'Daily practice')",
       "client_facing": "What this means for you in plain language",
-      "citations": [{"excerpt": "Direct quote from transcript", "context": "Why this intervention is appropriate"}]
+      "citations": [{"excerpt": "Quote", "context": "Why appropriate", "source": "transcript" or "knowledge_base", "document_title": "If from research/protocol"}]
     }
   ],
   "homework": [
@@ -130,7 +134,7 @@ Generate a treatment plan with the following structure:
       "task": "Specific task or exercise",
       "purpose": "Why this helps",
       "due_date": "Optional due date (ISO format)",
-      "citations": [{"excerpt": "Direct quote from transcript", "context": "Why this homework is relevant"}]
+      "citations": [{"excerpt": "Quote", "context": "Why relevant", "source": "transcript" or "knowledge_base"}]
     }
   ],
   "strengths": [
@@ -138,7 +142,7 @@ Generate a treatment plan with the following structure:
       "id": "str-1",
       "strength": "Identified strength",
       "how_to_leverage": "How we can use this in treatment",
-      "citations": [{"excerpt": "Direct quote showing this strength", "context": "How client demonstrated this"}]
+      "citations": [{"excerpt": "Quote showing strength", "context": "How demonstrated", "source": "transcript"}]
     }
   ],
   "risk_factors": {
@@ -160,7 +164,10 @@ IMPORTANT:
 - Include at least 1-2 homework assignments
 - Always assess risk factors, even if level is "low"
 - Make client_facing content warm, encouraging, and jargon-free
-- ALWAYS include citations with direct quotes from the transcript for each element (except risk_factors)`;
+- Include citations from BOTH the transcript AND knowledge base documents when relevant
+- For transcript citations: use source="transcript" with direct quotes
+- For knowledge base citations: use source="knowledge_base" with document_title and relevant excerpt
+- Interventions especially should cite research/protocols from the knowledge base when available`;
 }
 
 // Citation schema for explainability

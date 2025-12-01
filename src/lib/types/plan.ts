@@ -1,9 +1,14 @@
 // Treatment Plan Types - Matching PRD Schema
 
-// Citation for explainability - links plan elements to transcript sources
+// Citation source type
+export type CitationSource = "transcript" | "knowledge_base";
+
+// Citation for explainability - links plan elements to sources
 export interface Citation {
-  excerpt: string;  // The relevant transcript excerpt
+  excerpt: string;  // The relevant excerpt
   context?: string; // Brief explanation of why this is relevant
+  source?: CitationSource; // Where this citation came from
+  document_title?: string; // For knowledge_base sources, the document name
 }
 
 export interface PresentingConcerns {
