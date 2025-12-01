@@ -1,6 +1,9 @@
 /**
  * PDF and document text extraction utilities
+ * Uses unpdf for serverless-compatible PDF parsing
  */
+
+import { extractText, getDocumentProxy } from "unpdf";
 
 export interface ParsedDocument {
   text: string;
@@ -18,20 +21,28 @@ export interface ParsedDocument {
  */
 export async function parsePDF(buffer: Buffer): Promise<ParsedDocument> {
   try {
-    // Dynamic import for pdf-parse (CommonJS module)
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdf = require("pdf-parse");
-    const data = await pdf(buffer);
+    // Convert Buffer to Uint8Array for unpdf
+    const uint8Array = new Uint8Array(buffer);
+    
+    // Get document proxy for metadata
+    const pdf = await getDocumentProxy(uint8Array);
+    
+    // Extract text from all pages
+    const { text } = await extractText(uint8Array, { mergePages: true });
+    
+    // Get metadata
+    const metadata = await pdf.getMetadata().catch(() => null);
+    const info = metadata?.info as Record<string, string> | undefined;
     
     return {
-      text: data.text,
-      pageCount: data.numpages,
-      metadata: {
-        title: data.info?.Title,
-        author: data.info?.Author,
-        subject: data.info?.Subject,
-        creator: data.info?.Creator,
-      },
+      text: text as string,
+      pageCount: pdf.numPages,
+      metadata: info ? {
+        title: info.Title,
+        author: info.Author,
+        subject: info.Subject,
+        creator: info.Creator,
+      } : undefined,
     };
   } catch (error) {
     console.error("PDF parsing error:", error);
