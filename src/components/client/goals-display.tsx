@@ -79,4 +79,3 @@ export function GoalsDisplay({ goals }: GoalsDisplayProps) {
     </div>
   );
 }
-

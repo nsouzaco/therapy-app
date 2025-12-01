@@ -13,6 +13,7 @@ import { HomeworkSection } from "@/components/plan/homework-section";
 import { StrengthsSection } from "@/components/plan/strengths-section";
 import { GenerateButton } from "@/components/plan/generate-button";
 import { VersionHistory } from "@/components/plan/version-history";
+import { CopilotPanel } from "@/components/plan/copilot-panel";
 import type { PlanContent, PlanVersion, Goal, Intervention, Homework, Strength } from "@/lib/types/plan";
 
 interface ClientInfo {
@@ -41,6 +42,7 @@ export default function PlanPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [showCopilot, setShowCopilot] = useState(false);
 
   const fetchPlan = useCallback(async () => {
     try {
@@ -176,6 +178,38 @@ export default function PlanPage() {
     await updatePlanContent({ strengths: updated });
   };
 
+  // Handler for adding interventions from copilot
+  const handleAddIntervention = async (intervention: {
+    name: string;
+    description: string;
+    frequency: string;
+    client_facing: string;
+  }) => {
+    if (!content) return;
+    const newIntervention: Intervention = {
+      id: `int-${Date.now()}`,
+      ...intervention,
+    };
+    await updatePlanContent({
+      interventions: [...content.interventions, newIntervention],
+    });
+  };
+
+  // Handler for adding homework from copilot
+  const handleAddHomework = async (homework: {
+    task: string;
+    purpose: string;
+  }) => {
+    if (!content) return;
+    const newHomework: Homework = {
+      id: `hw-${Date.now()}`,
+      ...homework,
+    };
+    await updatePlanContent({
+      homework: [...content.homework, newHomework],
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -288,6 +322,19 @@ export default function PlanPage() {
                     Approve & Share
                   </>
                 )}
+              </Button>
+            )}
+            {/* AI Copilot Button */}
+            {content && (
+              <Button
+                variant="outline"
+                onClick={() => setShowCopilot(true)}
+                className="gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                AI Copilot
               </Button>
             )}
             <GenerateButton
@@ -435,6 +482,19 @@ export default function PlanPage() {
           planId={plan.id}
           currentVersionId={plan.current_version?.id || ""}
           onClose={() => setShowVersionHistory(false)}
+        />
+      )}
+
+      {/* AI Copilot Panel */}
+      {content && plan && (
+        <CopilotPanel
+          isOpen={showCopilot}
+          onClose={() => setShowCopilot(false)}
+          planId={plan.id}
+          goals={content.goals}
+          interventions={content.interventions}
+          onAddIntervention={handleAddIntervention}
+          onAddHomework={handleAddHomework}
         />
       )}
     </div>

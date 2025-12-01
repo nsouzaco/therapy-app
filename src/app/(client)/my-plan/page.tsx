@@ -8,6 +8,7 @@ import { PlanCard } from "@/components/client/plan-card";
 import { GoalsDisplay } from "@/components/client/goals-display";
 import { HomeworkDisplay } from "@/components/client/homework-display";
 import { StrengthsDisplay } from "@/components/client/strengths-display";
+import { ClientCopilot } from "@/components/client/client-copilot";
 
 interface User {
   name: string;
@@ -223,6 +224,13 @@ export default function ClientPlanPage() {
               year: "numeric",
             })}
           </p>
+
+          {/* Client Copilot - single floating button */}
+          <ClientCopilot
+            planId={plan.id}
+            goals={plan.content.goals}
+            interventions={plan.content.interventions}
+          />
         </div>
       )}
     </div>

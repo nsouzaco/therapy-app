@@ -18,10 +18,29 @@ An AI-powered mental health treatment planning application that transforms thera
 - **Version History** — Track plan changes with diff comparisons
 - **Editable Plans** — Inline editing for goals, interventions, and session notes
 - **Citation Evidence** — Click any plan element to see supporting transcript excerpts
+- **AI Copilot** — Conversational AI assistant for treatment planning (see below)
 
 ### Client Features
 - **My Plan** — Accessible view of treatment goals and homework in plain language
 - **Session History** — Review past sessions and progress
+- **Help Understanding** — AI-powered explanations of goals and interventions in simpler terms
+
+### AI Copilot (New)
+
+An intelligent assistant that helps therapists with treatment planning decisions:
+
+**Chat Mode:**
+- Ask free-form questions like "What if we tried DBT instead of CBT?"
+- Get suggestions for modifications based on client presentation
+- Explore alternative approaches with full plan context
+- Responses cite your uploaded knowledge base when relevant
+
+**Quick Actions:**
+- Suggest evidence-based interventions for a specific goal
+- Generate homework assignments for an intervention
+- Explain the research/evidence base behind techniques
+
+The copilot has full context of the client's treatment plan, your knowledge base documents, and recent session transcripts.
 
 ## Architecture
 

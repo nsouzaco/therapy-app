@@ -127,4 +127,3 @@ export function GoalsSection({ goals, onUpdateGoal, isEditable = true }: GoalsSe
     </div>
   );
 }
-
