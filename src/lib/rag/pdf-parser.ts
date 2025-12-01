@@ -17,12 +17,41 @@ export interface ParsedDocument {
 }
 
 /**
+ * Safely decode URI-encoded text, falling back to original if malformed
+ */
+function safeDecodeURIComponent(str: string): string {
+  try {
+    return decodeURIComponent(str);
+  } catch {
+    // If decoding fails, try to replace common encoded characters manually
+    return str
+      .replace(/%20/g, " ")
+      .replace(/%2C/g, ",")
+      .replace(/%2E/g, ".")
+      .replace(/%3A/g, ":")
+      .replace(/%3B/g, ";")
+      .replace(/%21/g, "!")
+      .replace(/%3F/g, "?")
+      .replace(/%27/g, "'")
+      .replace(/%22/g, '"')
+      .replace(/%28/g, "(")
+      .replace(/%29/g, ")")
+      .replace(/%2D/g, "-")
+      .replace(/%2F/g, "/")
+      .replace(/%0A/g, "\n")
+      .replace(/%0D/g, "\r")
+      .replace(/%09/g, "\t")
+      .replace(/%[0-9A-Fa-f]{2}/g, " "); // Replace any remaining encoded chars with space
+  }
+}
+
+/**
  * Extract text content from a PDF file using pdf2json
  * This library works in serverless environments without DOM
  */
 export async function parsePDF(buffer: Buffer): Promise<ParsedDocument> {
   return new Promise((resolve, reject) => {
-    const pdfParser = new PDFParser();
+    const pdfParser = new PDFParser(null, true); // true = don't combine text items
     
     pdfParser.on("pdfParser_dataError", (errData: Error | { parserError: Error }) => {
       const error = errData instanceof Error ? errData : errData.parserError;
@@ -30,37 +59,65 @@ export async function parsePDF(buffer: Buffer): Promise<ParsedDocument> {
       reject(new Error(`Failed to parse PDF: ${error.message}`));
     });
     
-    pdfParser.on("pdfParser_dataReady", (pdfData: { Pages: Array<{ Texts: Array<{ R: Array<{ T: string }> }> }>; Meta?: Record<string, string> }) => {
+    pdfParser.on("pdfParser_dataReady", () => {
       try {
-        // Extract text from all pages
-        const textParts: string[] = [];
+        // Use the built-in getRawTextContent method for cleaner extraction
+        const rawText = pdfParser.getRawTextContent();
         
-        for (const page of pdfData.Pages) {
-          for (const textItem of page.Texts) {
-            for (const run of textItem.R) {
-              // Decode URI-encoded text
-              const text = decodeURIComponent(run.T);
-              textParts.push(text);
-            }
-          }
-          // Add page break
-          textParts.push("\n\n");
-        }
+        // Clean up the text
+        const cleanedText = rawText
+          .replace(/\r\n/g, "\n")
+          .replace(/\r/g, "\n")
+          .replace(/\n{3,}/g, "\n\n")
+          .trim();
         
-        const fullText = textParts.join(" ").replace(/\s+/g, " ").trim();
+        // Get page count from internal data
+        // @ts-expect-error - accessing internal data for page count
+        const pageCount = pdfParser.data?.Pages?.length || 1;
         
         resolve({
-          text: fullText,
-          pageCount: pdfData.Pages.length,
-          metadata: pdfData.Meta ? {
-            title: pdfData.Meta.Title,
-            author: pdfData.Meta.Author,
-            subject: pdfData.Meta.Subject,
-            creator: pdfData.Meta.Creator,
-          } : undefined,
+          text: cleanedText,
+          pageCount,
+          metadata: undefined, // pdf2json doesn't expose metadata easily with this method
         });
       } catch (error) {
-        reject(new Error(`Failed to extract text: ${error instanceof Error ? error.message : "Unknown error"}`));
+        // Fallback to manual extraction if getRawTextContent fails
+        try {
+          const pdfData = (pdfParser as unknown as { data: { Pages: Array<{ Texts: Array<{ R: Array<{ T: string }> }> }>; Meta?: Record<string, string> } }).data;
+          if (!pdfData?.Pages) {
+            reject(new Error("Failed to parse PDF: No pages found"));
+            return;
+          }
+          
+          const textParts: string[] = [];
+          
+          for (const page of pdfData.Pages) {
+            for (const textItem of page.Texts || []) {
+              for (const run of textItem.R || []) {
+                const text = safeDecodeURIComponent(run.T || "");
+                if (text.trim()) {
+                  textParts.push(text);
+                }
+              }
+            }
+            textParts.push("\n\n");
+          }
+          
+          const fullText = textParts.join(" ").replace(/\s+/g, " ").trim();
+          
+          resolve({
+            text: fullText,
+            pageCount: pdfData.Pages.length,
+            metadata: pdfData.Meta ? {
+              title: pdfData.Meta.Title,
+              author: pdfData.Meta.Author,
+              subject: pdfData.Meta.Subject,
+              creator: pdfData.Meta.Creator,
+            } : undefined,
+          });
+        } catch {
+          reject(new Error(`Failed to extract text: ${error instanceof Error ? error.message : "Unknown error"}`));
+        }
       }
     });
     
