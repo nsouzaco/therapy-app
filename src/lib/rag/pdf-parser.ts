@@ -1,6 +1,9 @@
 /**
  * PDF and document text extraction utilities
+ * Uses pdf2json for serverless-compatible PDF parsing (no DOM dependencies)
  */
+
+import PDFParser from "pdf2json";
 
 export interface ParsedDocument {
   text: string;
@@ -14,43 +17,56 @@ export interface ParsedDocument {
 }
 
 /**
- * Custom page render function that extracts text without canvas
- * This avoids DOMMatrix errors in serverless environments
- */
-function renderPage(pageData: { getTextContent: () => Promise<{ items: Array<{ str: string }> }> }) {
-  return pageData.getTextContent().then((textContent) => {
-    return textContent.items.map((item) => item.str).join(" ");
-  });
-}
-
-/**
- * Extract text content from a PDF file
+ * Extract text content from a PDF file using pdf2json
+ * This library works in serverless environments without DOM
  */
 export async function parsePDF(buffer: Buffer): Promise<ParsedDocument> {
-  try {
-    // Dynamic require to avoid ESM issues
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require("pdf-parse");
+  return new Promise((resolve, reject) => {
+    const pdfParser = new PDFParser();
     
-    // Use custom page render to avoid canvas/DOMMatrix issues
-    const data = await pdfParse(buffer, {
-      pagerender: renderPage,
+    pdfParser.on("pdfParser_dataError", (errData: Error | { parserError: Error }) => {
+      const error = errData instanceof Error ? errData : errData.parserError;
+      console.error("PDF parsing error:", error);
+      reject(new Error(`Failed to parse PDF: ${error.message}`));
     });
     
-    return {
-      text: data.text,
-      pageCount: data.numpages,
-      metadata: {
-        title: data.info?.Title,
-        author: data.info?.Author,
-        subject: data.info?.Subject,
-        creator: data.info?.Creator,
-      },
-    };
-  } catch (error) {
-    console.error("PDF parsing error:", error);
-    throw new Error(`Failed to parse PDF: ${error instanceof Error ? error.message : "Unknown error"}`);
-  }
+    pdfParser.on("pdfParser_dataReady", (pdfData: { Pages: Array<{ Texts: Array<{ R: Array<{ T: string }> }> }>; Meta?: Record<string, string> }) => {
+      try {
+        // Extract text from all pages
+        const textParts: string[] = [];
+        
+        for (const page of pdfData.Pages) {
+          for (const textItem of page.Texts) {
+            for (const run of textItem.R) {
+              // Decode URI-encoded text
+              const text = decodeURIComponent(run.T);
+              textParts.push(text);
+            }
+          }
+          // Add page break
+          textParts.push("\n\n");
+        }
+        
+        const fullText = textParts.join(" ").replace(/\s+/g, " ").trim();
+        
+        resolve({
+          text: fullText,
+          pageCount: pdfData.Pages.length,
+          metadata: pdfData.Meta ? {
+            title: pdfData.Meta.Title,
+            author: pdfData.Meta.Author,
+            subject: pdfData.Meta.Subject,
+            creator: pdfData.Meta.Creator,
+          } : undefined,
+        });
+      } catch (error) {
+        reject(new Error(`Failed to extract text: ${error instanceof Error ? error.message : "Unknown error"}`));
+      }
+    });
+    
+    // Parse the buffer
+    pdfParser.parseBuffer(buffer);
+  });
 }
 
 /**
