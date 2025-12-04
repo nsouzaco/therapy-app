@@ -249,7 +249,7 @@ export function CopilotPanel({
         frequency: suggestion.frequency,
         client_facing: suggestion.client_facing,
       });
-      setAddedItems((prev) => new Set([...prev, index]));
+      setAddedItems((prev) => new Set(Array.from(prev).concat(index)));
     }
   };
 
@@ -259,7 +259,7 @@ export function CopilotPanel({
         task: suggestion.task,
         purpose: suggestion.purpose,
       });
-      setAddedItems((prev) => new Set([...prev, index + 100]));
+      setAddedItems((prev) => new Set(Array.from(prev).concat(index + 100)));
     }
   };
 

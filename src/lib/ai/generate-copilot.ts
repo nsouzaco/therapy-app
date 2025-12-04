@@ -22,7 +22,6 @@ import type {
   SuggestedIntervention,
   SuggestedHomework,
   RefinedGoal,
-  RAG_ENHANCED_ACTIONS,
 } from "@/lib/types/copilot";
 
 interface GenerateCopilotOptions extends CopilotRequest {

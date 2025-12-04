@@ -27,6 +27,24 @@ type ProcessingPhase =
   | "uploading-video"
   | "transcribing";
 
+// Helper functions for file type detection (outside component to avoid dependency issues)
+const isAudioFile = (file: File) => {
+  const audioTypes = [
+    "audio/mpeg", "audio/mp3", "audio/mp4", "audio/m4a",
+    "audio/wav", "audio/webm", "audio/ogg", "audio/x-m4a",
+  ];
+  return audioTypes.some(t => file.type.includes(t.split("/")[1])) ||
+    file.name.match(/\.(mp3|m4a|wav|webm|ogg)$/i);
+};
+
+const isAudioOrVideo = (file: File) => {
+  return isAudioFile(file) || isVideoFile(file);
+};
+
+const isTextFile = (file: File) => {
+  return file.type === "text/plain" || file.name.endsWith(".txt");
+};
+
 export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
   const [sessionDate, setSessionDate] = useState(
     new Date().toISOString().split("T")[0]
@@ -44,23 +62,6 @@ export function SessionUpload({ clientId, onSuccess }: SessionUploadProps) {
     language?: string;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const isAudioFile = (file: File) => {
-    const audioTypes = [
-      "audio/mpeg", "audio/mp3", "audio/mp4", "audio/m4a",
-      "audio/wav", "audio/webm", "audio/ogg", "audio/x-m4a",
-    ];
-    return audioTypes.some(t => file.type.includes(t.split("/")[1])) ||
-      file.name.match(/\.(mp3|m4a|wav|webm|ogg)$/i);
-  };
-
-  const isAudioOrVideo = (file: File) => {
-    return isAudioFile(file) || isVideoFile(file);
-  };
-
-  const isTextFile = (file: File) => {
-    return file.type === "text/plain" || file.name.endsWith(".txt");
-  };
 
   const handleFile = useCallback(async (file: File) => {
     setError(null);
